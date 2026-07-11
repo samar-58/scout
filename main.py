@@ -1,6 +1,10 @@
-def main():
-    print("Hello from multi-agent-learn!")
+from fastapi import FastAPI
+import uvicorn
 
+app = FastAPI()
+@app.get("/")
+def read_root():
+    return {"message": "Hello, World!"}
 
 if __name__ == "__main__":
-    main()
+    uvicorn.run(app, host="0.0.0.0", port=3000)
