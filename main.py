@@ -2,6 +2,8 @@ from fastapi import FastAPI
 from pydantic import BaseModel, Field
 import uvicorn
 from llm import llm
+from typing import Literal
+from langchain_core.prompts import ChatPromptTemplate
 
 app = FastAPI(
     title="Multi agent tutorial",
@@ -44,6 +46,8 @@ prompt = ChatPromptTemplate.from_messages(    [
         ),
     ])
 
+chain = prompt | structured_llm
+
 @app.get("/")
 def read_root():
     return {"message": "Hello, World!"}
@@ -54,8 +58,8 @@ def health_check():
     
 @app.post("/chat")
 def chat(request: ChatRequest):
-    response = llm.invoke(request.message)
-    return {"response": response.content}
+    response = chain.invoke(request.message)
+    return {"response": response}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=3000)
