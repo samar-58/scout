@@ -22,13 +22,16 @@ class ChatResponse(BaseModel):
         "intermediate",
         "advanced",
     ]
+class MultiplicationAnswer(BaseModel):
+    answer: int
+
 class ChatRequest(BaseModel):
     message: str = Field(
         min_length = 1,
         description="user message"
     )
 
-structured_llm = llm.with_structured_output(ChatResponse)
+structured_llm = llm.with_structured_output(MultiplicationAnswer)
 
 prompt = ChatPromptTemplate.from_messages(    [
         (
