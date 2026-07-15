@@ -8,12 +8,41 @@ app = FastAPI(
     version="1.0.0"
 )
 
+class ChatResponse(BaseModel):
+    answer: str = Field(
+        description="response from the model"
+    )
+    topics: list[str] = Field(
+        description="topics of the response"
+    )
+    difficulty: Literal[
+        "beginner",
+        "intermediate",
+        "advanced",
+    ]
 class ChatRequest(BaseModel):
     message: str = Field(
         min_length = 1,
         description="user message"
     )
 
+structured_llm = llm.with_structured_output(ChatResponse)
+
+prompt = ChatPromptTemplate.from_messages(    [
+        (
+            "system",
+            """
+            You are a helpful AI teacher.
+
+            Explain technical concepts simply.
+            Use practical examples when useful.
+            """,
+        ),
+        (
+            "human",
+            "{message}",
+        ),
+    ])
 
 @app.get("/")
 def read_root():
