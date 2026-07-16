@@ -4,7 +4,8 @@ import uvicorn
 from llm import llm
 from typing import Literal
 from langchain_core.prompts import ChatPromptTemplate
-
+from graph import graph
+from langchain_core.messages import HumanMessage
 app = FastAPI(
     title="Multi agent tutorial",
     version="1.0.0"
@@ -61,8 +62,17 @@ def health_check():
     
 @app.post("/chat")
 def chat(request: ChatRequest):
-    response = chain.invoke(request.message)
-    return {"response": response}
+    result = graph.invoke(
+    {
+        "messages": [
+            HumanMessage(
+                content=request.message
+            )
+        ]
+    }
+    )
+    final_message = result["messages"][-1]
+    return {"response": final_message.content}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=3000)
