@@ -34,23 +34,6 @@ class ChatRequest(BaseModel):
 
 structured_llm = llm.with_structured_output(MultiplicationAnswer)
 
-prompt = ChatPromptTemplate.from_messages(    [
-        (
-            "system",
-            """
-            You are a helpful AI teacher.
-
-            Explain technical concepts simply.
-            Use practical examples when useful.
-            """,
-        ),
-        (
-            "human",
-            "{message}",
-        ),
-    ])
-
-chain = prompt | structured_llm
 
 @app.get("/")
 def read_root():
@@ -72,6 +55,7 @@ def chat(request: ChatRequest):
     }
     )
     final_message = result["messages"][-1]
+    print(result)
     return {"response": final_message.content}
 
 if __name__ == "__main__":

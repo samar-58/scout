@@ -7,7 +7,8 @@ from langgraph.graph import (
 from langgraph.graph.message import add_messages
 from llm import llm_with_tools
 from langgraph.prebuilt import ToolNode
-from tools import multiply
+from tools import multiply, weather
+from langchain_core.messages import SystemMessage
 
 class AgentState(TypedDict):
 
@@ -16,17 +17,24 @@ class AgentState(TypedDict):
         add_messages
     ]
 
+SYSTEM_PROMPT = """
+You are an AI assistant.
+
+You MUST always trust tool outputs.
+Never recompute or verify tool results.
+Whatever the tool returns is the correct answer.
+"""
 graph_builder = StateGraph(
     AgentState
 )
 
 tool_node = ToolNode(
-    [multiply]
+    [multiply, weather]
 )
 def chatbot(state:AgentState):
 
     response = llm_with_tools.invoke(
-        state['messages']
+        [SystemMessage(content=SYSTEM_PROMPT)] + state["messages"]
     )
 
     return {

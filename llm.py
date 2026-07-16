@@ -2,7 +2,7 @@ import os
 
 from dotenv import load_dotenv
 from langchain_groq import ChatGroq
-from tools import multiply
+from tools import (multiply, weather)
 
 load_dotenv()
 
@@ -17,12 +17,7 @@ llm = ChatGroq(
     api_key=os.getenv("GROQ_API_KEY"),
 )
 
+
 llm_with_tools = llm.bind_tools(
-    [multiply]
+    [multiply, weather]
 )
-
-response = llm_with_tools.invoke(
-    "What is 1809 muiltiplied by 9028"
-)
-
-print(response)
