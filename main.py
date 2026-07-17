@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 import uvicorn
 from llm import llm
@@ -6,6 +6,11 @@ from typing import Literal
 from langchain_core.prompts import ChatPromptTemplate
 from graph import graph
 from langchain_core.messages import HumanMessage
+from startup_graph import (
+    StartupStressTestRequest,
+    StartupStressTestResponse,
+    run_startup_stress_test,
+)
 app = FastAPI(
     title="Multi agent tutorial",
     version="1.0.0"
@@ -57,6 +62,15 @@ def chat(request: ChatRequest):
     final_message = result["messages"][-1]
     print(result)
     return {"response": final_message.content}
+
+
+@app.post("/startup/stress-test", response_model=StartupStressTestResponse)
+def startup_stress_test(request: StartupStressTestRequest):
+    try:
+        return run_startup_stress_test(request)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=3000)
