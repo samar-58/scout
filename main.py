@@ -9,7 +9,10 @@ from langchain_core.messages import HumanMessage
 from startup_graph import (
     StartupStressTestRequest,
     StartupStressTestResponse,
+    StartupStressTestV2Request,
+    StartupStressTestV2Response,
     run_startup_stress_test,
+    run_startup_stress_test_v2,
 )
 app = FastAPI(
     title="Multi agent tutorial",
@@ -68,6 +71,14 @@ def chat(request: ChatRequest):
 def startup_stress_test(request: StartupStressTestRequest):
     try:
         return run_startup_stress_test(request)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.post("/startup/stress-test/v2", response_model=StartupStressTestV2Response)
+def startup_stress_test_v2(request: StartupStressTestV2Request):
+    try:
+        return run_startup_stress_test_v2(request)
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
