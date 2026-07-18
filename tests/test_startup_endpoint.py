@@ -10,6 +10,7 @@ os.environ.setdefault("GROQ_API_KEY", "test-groq-key")
 from fastapi.testclient import TestClient
 
 from main import app
+from llm import _groq_model
 from startup_graph import (
     AgentInsight,
     CompetitorAgentOutput,
@@ -42,7 +43,9 @@ from startup_graph import (
     _invoke_with_retry,
     _normalize_sources,
     _normalize_tavily_payload,
+    _run_structured_agent,
     _strict_structured,
+    _to_agent_insight,
     run_startup_stress_test,
     run_startup_stress_test_v2,
     stream_startup_stress_test_v2,
@@ -377,13 +380,19 @@ class FakeLLM:
 
 
 class RecordingStructuredModel:
-    def __init__(self, model_name=""):
+    def __init__(self, model_name="", response=None):
         self.model_name = model_name
+        self.response = response
         self.calls = []
+        self.invoke_calls = []
 
     def with_structured_output(self, schema, **kwargs):
         self.calls.append((schema, kwargs))
         return self
+
+    def invoke(self, messages):
+        self.invoke_calls.append(messages)
+        return self.response
 
 
 class RateLimitError(RuntimeError):
@@ -447,12 +456,42 @@ class StartupStressTestEndpointTests(unittest.TestCase):
             {"method": "json_schema", "strict": True},
         )
 
-    def test_qwen_structured_output_uses_function_calling(self):
-        model = RecordingStructuredModel("qwen/qwen3.6-27b")
-        runnable = _strict_structured(model, MarketAgentOutput)
-        self.assertIs(runnable, model)
-        self.assertEqual(model.calls[0][0], MarketAgentOutput)
-        self.assertEqual(model.calls[0][1], {"method": "function_calling"})
+    def test_qwen_model_disables_reasoning_for_structured_specialists(self):
+        with patch("llm.ChatGroq") as chat_groq:
+            _groq_model("qwen/qwen3.6-27b", max_tokens=1800)
+
+        options = chat_groq.call_args.kwargs
+        self.assertEqual(options["reasoning_format"], "hidden")
+        self.assertEqual(options["reasoning_effort"], "none")
+
+    def test_qwen_structured_output_is_parsed_locally_without_provider_mode(self):
+        for schema in (CompetitorAgentOutput, CustomerAgentOutput):
+            with self.subTest(schema=schema.__name__):
+                expected = FakeStructuredLLM(schema).invoke([])
+                model = RecordingStructuredModel(
+                    "qwen/qwen3.6-27b",
+                    SimpleNamespace(
+                        content=f"Result:\n```json\n{expected.model_dump_json()}\n```"
+                    ),
+                )
+                runnable = _strict_structured(model, schema)
+
+                result = runnable.invoke(["prompt"])
+
+                self.assertEqual(result, expected)
+                self.assertEqual(model.calls, [])
+                self.assertEqual(model.invoke_calls, [["prompt"]])
+
+    def test_qwen_local_structured_output_rejects_invalid_json(self):
+        model = RecordingStructuredModel(
+            "qwen/qwen3.6-27b",
+            SimpleNamespace(content="not a JSON response"),
+        )
+        runnable = _strict_structured(model, CustomerAgentOutput)
+
+        with self.assertRaisesRegex(ValueError, "CustomerAgentOutput JSON"):
+            runnable.invoke(["prompt"])
+        self.assertEqual(model.calls, [])
 
     def test_llm_rate_limit_is_retried_with_provider_delay(self):
         runnable = FlakyRunnable()
@@ -461,6 +500,34 @@ class StartupStressTestEndpointTests(unittest.TestCase):
         self.assertEqual(result, {"ok": True})
         self.assertEqual(runnable.calls, 2)
         sleep.assert_called_once_with(0.5)
+
+    def test_specialist_invalid_local_json_emits_failure_and_falls_back(self):
+        model = RecordingStructuredModel(
+            "qwen/qwen3.6-27b",
+            SimpleNamespace(content="not a JSON response"),
+        )
+        events = []
+        state = {
+            "idea": "AI copilot for accountants",
+            "evidence": "Evidence from https://example.com/source",
+            "evidence_sections": {},
+        }
+
+        with (
+            patch("startup_graph.specialist_llm", model),
+            patch("startup_graph._stream_writer", return_value=events.append),
+        ):
+            output = _run_structured_agent(
+                state,
+                "customer_analyst",
+                "Analyze customers.",
+                "Return customer pain.",
+            )
+
+        self.assertEqual(output.findings, [])
+        self.assertIn("failed; synthesis continued", output.summary)
+        self.assertEqual(events[-1]["status"], "failed")
+        self.assertNotIn("Error code: 400", events[-1]["error"])
 
     def test_tavily_payload_normalizes_artifact_and_rejects_error_dict(self):
         artifact = {
@@ -533,6 +600,72 @@ class StartupStressTestEndpointTests(unittest.TestCase):
         self.assertEqual(len(digest), 5)
         self.assertTrue(all(len(source["title"]) <= 90 for source in digest))
         self.assertTrue(all(len(source["snippet"]) <= 80 for source in digest))
+
+    def test_synthesis_context_adapts_for_populated_specialist_outputs(self):
+        def inflate(value):
+            if isinstance(value, str):
+                return value + " detailed evidence" * 80
+            if isinstance(value, list):
+                inflated = [inflate(item) for item in value]
+                return (inflated * 4)[:8]
+            if isinstance(value, dict):
+                return {key: inflate(item) for key, item in value.items()}
+            return value
+
+        role_schemas = {
+            "market_analyst": MarketAgentOutput,
+            "competitor_analyst": CompetitorAgentOutput,
+            "customer_analyst": CustomerAgentOutput,
+            "gtm_agent": GTMAgentOutput,
+            "vc_partner": VCPartnerOutput,
+            "moat_agent": MoatAgentOutput,
+            "experiment_agent": ExperimentAgentOutput,
+        }
+        outputs = {}
+        for name, schema in role_schemas.items():
+            insight = _to_agent_insight(name, FakeStructuredLLM(schema).invoke([]))
+            outputs[name] = AgentInsight.model_validate(inflate(insight.model_dump()))
+
+        serialized = _compact_agent_outputs(outputs)
+        compact = json.loads(serialized)
+
+        self.assertLessEqual(len(serialized), 8_000)
+        self.assertEqual(set(compact), set(outputs))
+        self.assertTrue(all(compact[name]["summary"] for name in outputs))
+        self.assertTrue(
+            all(
+                "dimension_scores" in compact[name]
+                for name in (
+                    "market_analyst",
+                    "competitor_analyst",
+                    "gtm_agent",
+                    "experiment_agent",
+                )
+            )
+        )
+
+    def test_synthesis_context_has_a_guaranteed_minimal_fallback(self):
+        outputs = {
+            f"agent_{index}": AgentInsight.model_validate(
+                {
+                    "summary": "Useful conclusion " * 100,
+                    "findings": ["Finding " * 100],
+                    **{
+                        f"extra_field_{field}": "Evidence " * 100
+                        for field in range(500)
+                    },
+                }
+            )
+            for index in range(7)
+        }
+
+        serialized = _compact_agent_outputs(outputs)
+        compact = json.loads(serialized)
+
+        self.assertLessEqual(len(serialized), 8_000)
+        self.assertIsInstance(compact, list)
+        self.assertEqual(len(compact), 7)
+        self.assertTrue(all(entry["summary"] for entry in compact))
 
     def test_health_still_works(self):
         response = self.client.get("/health")

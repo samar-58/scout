@@ -25,7 +25,8 @@ def _groq_model(model: str, max_tokens: int) -> ChatGroq:
     if model.startswith("openai/gpt-oss-"):
         options["reasoning_effort"] = "low"
     elif model.startswith("qwen/"):
-        options["reasoning_format"] = "parsed"
+        options["reasoning_format"] = "hidden"
+        options["reasoning_effort"] = "none"
     return ChatGroq(**options)
 
 

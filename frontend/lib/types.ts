@@ -52,6 +52,11 @@ export interface ReportEvent {
   report?: Record<string, unknown>;
 }
 
+export interface Source {
+  url: string;
+  title?: string;
+}
+
 export interface StartupFormState {
   idea: string;
   problem: string;

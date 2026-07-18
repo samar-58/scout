@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Annotated, Any, TypedDict
 
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.utils.json import parse_partial_json
 from langchain_tavily import TavilySearch
 from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
@@ -79,7 +80,14 @@ def _public_error(exc: Exception) -> str:
     lowered = message.lower()
     if "rate limit" in lowered or "429" in lowered:
         return "The model provider is temporarily rate-limited after bounded retries."
-    if "tool choice" in lowered or "tool call validation" in lowered:
+    if (
+        "tool choice" in lowered
+        or "tool call validation" in lowered
+        or "tool_use_failed" in lowered
+        or "failed to call a function" in lowered
+        or "json_validate_failed" in lowered
+        or "failed to validate json" in lowered
+    ):
         return "The model provider could not produce the required structured response."
     if "timeout" in lowered or "timed out" in lowered:
         return "The provider request timed out after bounded retries."
@@ -742,15 +750,87 @@ def _merge_agent_outputs(
 STRICT_JSON_SCHEMA_MODELS = {"openai/gpt-oss-20b", "openai/gpt-oss-120b"}
 
 
+def _response_text(response: Any) -> str:
+    """Return text from a raw chat-model response without assuming one content shape."""
+    content = response if isinstance(response, str) else getattr(response, "content", None)
+    if content is None and isinstance(response, dict):
+        content = response.get("content")
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict):
+                text = block.get("text") or block.get("content")
+                if isinstance(text, str):
+                    parts.append(text)
+        if parts:
+            return "".join(parts)
+    raise ValueError("The model returned no text to parse as structured JSON.")
+
+
+def _parse_local_json(response: Any, schema: type[BaseModel]) -> BaseModel:
+    """Extract one JSON object from model text and validate it locally."""
+    text = _response_text(response).strip()
+    candidates = [text]
+    candidates.extend(
+        match.group(1).strip()
+        for match in re.finditer(
+            r"```(?:json)?\s*(.*?)```",
+            text,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+    )
+
+    decoder = json.JSONDecoder()
+    for candidate in candidates:
+        try:
+            return schema.model_validate_json(candidate)
+        except (ValueError, TypeError):
+            pass
+        for index, character in enumerate(candidate):
+            if character != "{":
+                continue
+            fragment = candidate[index:]
+            try:
+                value, _end = decoder.raw_decode(fragment)
+                return schema.model_validate(value)
+            except (json.JSONDecodeError, ValueError, TypeError):
+                pass
+            try:
+                value = parse_partial_json(fragment)
+                return schema.model_validate(value)
+            except (json.JSONDecodeError, ValueError, TypeError):
+                continue
+
+    raise ValueError(
+        f"The model response did not contain valid {schema.__name__} JSON."
+    )
+
+
+class _LocallyParsedJson:
+    """Invoke a model without provider output constraints, then validate locally."""
+
+    def __init__(self, model: Any, schema: type[BaseModel]):
+        self.model = model
+        self.schema = schema
+
+    def invoke(self, messages: list[Any]) -> BaseModel:
+        return _parse_local_json(self.model.invoke(messages), self.schema)
+
+
 def _strict_structured(model: Any, schema: type[BaseModel]) -> Any:
     """Return structured output compatible with the configured Groq model.
 
-    GPT-OSS supports Groq constrained JSON schema; Qwen uses JSON object mode
-    and Pydantic parsing, which avoids unreliable forced tool calls.
+    GPT-OSS uses Groq constrained JSON schema. Other models, including Qwen,
+    are invoked without response_format or tools; their text is extracted and
+    Pydantic-validated locally to avoid provider-side structured-output errors.
     """
     model_name = str(getattr(model, "model_name", ""))
     if model_name and model_name not in STRICT_JSON_SCHEMA_MODELS:
-        return model.with_structured_output(schema, method="function_calling")
+        return _LocallyParsedJson(model, schema)
     return model.with_structured_output(
         schema,
         method="json_schema",
@@ -901,8 +981,11 @@ def _run_structured_agent(
                     f"{role_prompt} Use only supplied evidence for factual claims. "
                     "If evidence is missing, say 'Not found in current evidence' rather "
                     "than inventing numbers, names, or citations. Return only the "
-                    "requested structured result. Use at most five items in any list and "
-                    "keep each item concise."
+                    "requested structured result. Your entire reply must be one valid "
+                    "JSON object matching this schema, including every required field; "
+                    "do not use Markdown, prose outside the object, or tool calls. "
+                    f"Schema: {json.dumps(schema.model_json_schema(), separators=(',', ':'))} "
+                    "Use at most five items in any list and keep each item concise."
                 )
             ),
             HumanMessage(
@@ -1447,35 +1530,112 @@ def experiment_agent_node(state: StartupStressTestV2State) -> StartupStressTestV
     return _merge_agent_outputs("experiment_agent", output)
 
 
-def _compact_for_synthesis(value: Any) -> Any:
+def _compact_for_synthesis(
+    value: Any,
+    *,
+    value_chars: int = MAX_SYNTHESIS_VALUE_CHARS,
+    list_items: int = MAX_SYNTHESIS_LIST_ITEMS,
+) -> Any:
     if isinstance(value, BaseModel):
         value = value.model_dump(exclude_none=True, exclude_defaults=True)
     if isinstance(value, str):
-        return _truncate(value, MAX_SYNTHESIS_VALUE_CHARS)
+        return _truncate(value, value_chars)
     if isinstance(value, list):
         return [
-            _compact_for_synthesis(item)
-            for item in value[:MAX_SYNTHESIS_LIST_ITEMS]
+            _compact_for_synthesis(
+                item,
+                value_chars=value_chars,
+                list_items=list_items,
+            )
+            for item in value[:list_items]
         ]
     if isinstance(value, dict):
         return {
-            key: _compact_for_synthesis(item)
+            key: _compact_for_synthesis(
+                item,
+                value_chars=value_chars,
+                list_items=list_items,
+            )
             for key, item in value.items()
         }
     return value
 
 
 def _compact_agent_outputs(outputs: dict[str, AgentInsight]) -> str:
-    compact = {
-        name: _compact_for_synthesis(output)
-        for name, output in outputs.items()
-    }
-    serialized = json.dumps(compact, default=str, separators=(",", ":"))
-    if len(serialized) > MAX_SYNTHESIS_AGENT_CONTEXT_CHARS:
-        raise RuntimeError(
-            "Specialist context exceeded the configured synthesis budget."
-        )
-    return serialized
+    ordered_names = [name for name in AGENT_DISPLAY_NAMES if name in outputs]
+    ordered_names.extend(sorted(name for name in outputs if name not in ordered_names))
+
+    def serialize(value_chars: int, list_items: int) -> str:
+        compact = {
+            name: _compact_for_synthesis(
+                outputs[name],
+                value_chars=value_chars,
+                list_items=list_items,
+            )
+            for name in ordered_names
+        }
+        return json.dumps(compact, default=str, separators=(",", ":"))
+
+    serialized = serialize(
+        MAX_SYNTHESIS_VALUE_CHARS,
+        MAX_SYNTHESIS_LIST_ITEMS,
+    )
+    if len(serialized) <= MAX_SYNTHESIS_AGENT_CONTEXT_CHARS:
+        return serialized
+
+    candidates: list[tuple[float, str]] = []
+    for list_items in (MAX_SYNTHESIS_LIST_ITEMS, 1):
+        low, high = 8, MAX_SYNTHESIS_VALUE_CHARS - 1
+        best_chars = 0
+        best_serialized = ""
+        while low <= high:
+            value_chars = (low + high) // 2
+            candidate = serialize(value_chars, list_items)
+            if len(candidate) <= MAX_SYNTHESIS_AGENT_CONTEXT_CHARS:
+                best_chars = value_chars
+                best_serialized = candidate
+                low = value_chars + 1
+            else:
+                high = value_chars - 1
+        if best_serialized:
+            coverage_weight = 1.5 if list_items > 1 else 1.0
+            candidates.append((best_chars * coverage_weight, best_serialized))
+
+    if candidates:
+        return max(candidates, key=lambda candidate: candidate[0])[1]
+
+    # Structural field names can dominate unusually dense outputs. Synthesis only
+    # needs each specialist's conclusion and scores because owned report sections
+    # are backfilled from the original outputs after synthesis.
+    essential = [
+        {
+            "agent": _truncate(name, 40),
+            "summary": _truncate(outputs[name].summary, 80),
+            "finding": _truncate(
+                outputs[name].findings[0] if outputs[name].findings else "",
+                60,
+            ),
+            "scores": {
+                _truncate(label, 24): score.score
+                for label, score in sorted(
+                    outputs[name].dimension_scores.items()
+                )[:6]
+            },
+        }
+        for name in ordered_names[: len(AGENT_DISPLAY_NAMES)]
+    ]
+    essential_serialized = json.dumps(essential, separators=(",", ":"))
+    if len(essential_serialized) <= MAX_SYNTHESIS_AGENT_CONTEXT_CHARS:
+        return essential_serialized
+
+    minimal = [
+        {
+            "agent": _truncate(name, 40),
+            "summary": _truncate(outputs[name].summary, 20),
+        }
+        for name in ordered_names[: len(AGENT_DISPLAY_NAMES)]
+    ]
+    return json.dumps(minimal, separators=(",", ":"))
 
 
 def _source_digest(sources: list[Source]) -> str:
