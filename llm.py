@@ -12,9 +12,30 @@ if not os.getenv("GROQ_API_KEY"):
         "GROQ_API_KEY was not found in the .env file."
     )
 
-llm = ChatGroq(
-    model="llama-3.3-70b-versatile",
-    api_key=os.getenv("GROQ_API_KEY"),
+
+def _groq_model(model: str, max_tokens: int) -> ChatGroq:
+    options = {
+        "model": model,
+        "api_key": os.getenv("GROQ_API_KEY"),
+        "temperature": 0,
+        "max_tokens": max_tokens,
+        "max_retries": 1,
+        "request_timeout": 60,
+    }
+    if model.startswith("openai/gpt-oss-"):
+        options["reasoning_effort"] = "low"
+    elif model.startswith("qwen/"):
+        options["reasoning_format"] = "parsed"
+    return ChatGroq(**options)
+
+
+specialist_llm = _groq_model(
+    os.getenv("GROQ_SPECIALIST_MODEL", "qwen/qwen3.6-27b"),
+    max_tokens=int(os.getenv("GROQ_SPECIALIST_MAX_TOKENS", "1800")),
+)
+llm = _groq_model(
+    os.getenv("GROQ_SYNTHESIS_MODEL", "openai/gpt-oss-120b"),
+    max_tokens=int(os.getenv("GROQ_SYNTHESIS_MAX_TOKENS", "1800")),
 )
 
 

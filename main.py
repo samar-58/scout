@@ -1,11 +1,15 @@
+import os
+from typing import Any, Literal
+
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, ConfigDict, Field
 import uvicorn
-from llm import llm
-from typing import Literal
-from langchain_core.prompts import ChatPromptTemplate
 from graph import graph
 from langchain_core.messages import HumanMessage
+
+from ai_sdk_stream import UIMessageStreamFormatter, encode_sse
 from startup_graph import (
     StartupStressTestRequest,
     StartupStressTestResponse,
@@ -13,11 +17,43 @@ from startup_graph import (
     StartupStressTestV2Response,
     run_startup_stress_test,
     run_startup_stress_test_v2,
+    stream_startup_stress_test_v2,
 )
 app = FastAPI(
     title="Multi agent tutorial",
     version="1.0.0"
 )
+
+frontend_origins = [
+    origin.strip()
+    for origin in os.getenv(
+        "FRONTEND_ORIGINS",
+        "http://localhost:3001,http://127.0.0.1:3001",
+    ).split(",")
+    if origin.strip()
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=frontend_origins,
+    allow_credentials=False,
+    allow_methods=["POST", "OPTIONS"],
+    allow_headers=["Content-Type"],
+    expose_headers=["x-vercel-ai-ui-message-stream"],
+)
+
+
+class UIMessage(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    id: str
+    role: Literal["system", "user", "assistant"]
+    parts: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class StartupStressTestV2StreamRequest(BaseModel):
+    messages: list[UIMessage] = Field(min_length=1)
+    startup: StartupStressTestV2Request
+
 
 class ChatResponse(BaseModel):
     answer: str = Field(
@@ -31,16 +67,11 @@ class ChatResponse(BaseModel):
         "intermediate",
         "advanced",
     ]
-class MultiplicationAnswer(BaseModel):
-    answer: int
-
 class ChatRequest(BaseModel):
     message: str = Field(
         min_length = 1,
         description="user message"
     )
-
-structured_llm = llm.with_structured_output(MultiplicationAnswer)
 
 
 @app.get("/")
@@ -81,6 +112,27 @@ def startup_stress_test_v2(request: StartupStressTestV2Request):
         return run_startup_stress_test_v2(request)
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+async def _stream_sse_events(request: StartupStressTestV2Request):
+    formatter = UIMessageStreamFormatter()
+    async for event in stream_startup_stress_test_v2(request):
+        for part in formatter.translate(event):
+            yield encode_sse(part)
+    yield "data: [DONE]\n\n"
+
+
+@app.post("/startup/stress-test/v2/stream")
+async def startup_stress_test_v2_stream(request: StartupStressTestV2StreamRequest):
+    return StreamingResponse(
+        _stream_sse_events(request.startup),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+            "x-vercel-ai-ui-message-stream": "v1",
+        },
+    )
 
 
 if __name__ == "__main__":
