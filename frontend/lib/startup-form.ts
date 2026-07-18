@@ -55,7 +55,7 @@ export function readablePrompt(payload: StartupPayload) {
     payload.geography && `Market: ${payload.geography}`,
     payload.business_model && `Business model: ${payload.business_model}`,
   ].filter(Boolean);
-  return `Stress-test this startup idea: ${payload.idea}${
+  return `Research and evaluate this startup idea: ${payload.idea}${
     context.length ? `\n${context.join("\n")}` : ""
   }`;
 }

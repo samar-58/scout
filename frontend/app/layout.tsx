@@ -21,8 +21,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Startup Research Lab",
-  description: "Evidence-backed multi-agent startup stress testing",
+  title: "Scout — Evidence-backed startup research",
+  description:
+    "Scout runs a team of specialist AI analysts over your startup idea and returns a scored, cited verdict.",
 };
 
 export default function RootLayout({

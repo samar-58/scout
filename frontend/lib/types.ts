@@ -32,16 +32,22 @@ export interface SearchEvent {
   failed_search_count?: number;
 }
 
+export interface ScoreDimension {
+  score: number;
+  rationale?: string;
+  evidence?: string;
+}
+
 export interface ScoreEvent {
   type: "score";
   scores: {
     overall: number;
-    market: { score: number };
-    competition: { score: number };
-    distribution: { score: number };
-    execution: { score: number };
-    timing: { score: number };
-    monetization: { score: number };
+    market: ScoreDimension;
+    competition: ScoreDimension;
+    distribution: ScoreDimension;
+    execution: ScoreDimension;
+    timing: ScoreDimension;
+    monetization: ScoreDimension;
   };
   score_explanation: string;
 }

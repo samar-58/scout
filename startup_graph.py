@@ -1164,11 +1164,6 @@ def _build_score_explanation(scores: StartupScores) -> str:
     )
 
 
-def _stars(score: int) -> str:
-    filled = max(0, min(5, round(score / 2)))
-    return "*" * filled + "-" * (5 - filled)
-
-
 def _markdown_cell(value: Any) -> str:
     return str(value or "Not found in current evidence").replace("|", "\\|").replace("\n", " ")
 
@@ -1240,19 +1235,10 @@ def _build_markdown_report(
     moat = report.moat_analysis
 
     return (
-        "# Startup Stress Test\n\n"
-        f"## Verdict\n{report.verdict}\n\n"
-        f"**Investment recommendation:** {report.investment_recommendation}\n\n"
-        f"**Overall score:** {scores.overall}/100 · **Confidence:** {report.confidence}%\n\n"
-        f"> Evidence coverage: {evidence_note}\n\n"
-        "## Scorecard\n"
-        f"- Market: {_stars(scores.market.score)} ({scores.market.score}/10) — {scores.market.rationale}\n"
-        f"- Competition: {_stars(scores.competition.score)} ({scores.competition.score}/10) — {scores.competition.rationale}\n"
-        f"- Distribution: {_stars(scores.distribution.score)} ({scores.distribution.score}/10) — {scores.distribution.rationale}\n"
-        f"- Execution: {_stars(scores.execution.score)} ({scores.execution.score}/10) — {scores.execution.rationale}\n"
-        f"- Timing: {_stars(scores.timing.score)} ({scores.timing.score}/10) — {scores.timing.rationale}\n"
-        f"- Monetization: {_stars(scores.monetization.score)} ({scores.monetization.score}/10) — {scores.monetization.rationale}\n\n"
-        f"**Why points were lost:** {report.score_explanation}\n\n"
+        f"## Verdict\n\n{report.verdict}\n\n"
+        f"**Recommendation:** {report.investment_recommendation}\n\n"
+        f"**Confidence:** {report.confidence}%\n\n"
+        f"> {evidence_note}\n\n"
         "## Market and Timing\n"
         f"- **TAM:** {market.tam or 'Not found in current evidence'}\n"
         f"- **SAM:** {market.sam or 'Not found in current evidence'}\n"

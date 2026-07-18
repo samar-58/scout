@@ -5,83 +5,93 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Design tokens — warm editorial, inspired by memory.store and bondapp.io:
- * warm paper background, near-black warm ink (never pure #000/#fff), a single
- * saturated terracotta accent for actions/status, serif display headings
- * paired with a clean sans body, mixed radii (soft cards, pill badges).
+ * Scout design tokens — warm paper + ink monochrome with a single restrained
+ * burnt-amber brand accent. Editorial, high-contrast, and confidently
+ * un-flashy: no generic AI blue. Serif display (Fraunces) headings carry the
+ * character; the amber accent is used sparingly for eyebrows, the logo, and
+ * active states. Semantic colors are reserved strictly for status + scores.
  */
 :root {
-  --radius: 0.625rem;
+  --radius: 0.5rem;
 
-  /* Warm neutral base */
-  --background: #faf9f5;
-  --foreground: #221d17;
+  /* Warm paper base */
+  --background: #faf9f6;
+  --foreground: #1c1a17;
   --card: #ffffff;
-  --card-foreground: #221d17;
+  --card-foreground: #1c1a17;
   --popover: #ffffff;
-  --popover-foreground: #221d17;
+  --popover-foreground: #1c1a17;
 
-  /* Single saturated accent (terracotta) */
-  --primary: #d9531e;
-  --primary-foreground: #fff8f2;
-  --secondary: #f0ece2;
-  --secondary-foreground: #40392e;
-  --muted: #f0ece2;
-  --muted-foreground: #6b6459;
-  --accent: #f5e6d8;
-  --accent-foreground: #7a3212;
+  /* Ink primary action (monochrome, premium) */
+  --primary: #1c1a17;
+  --primary-foreground: #faf9f6;
+  --secondary: #f2f0eb;
+  --secondary-foreground: #2a2723;
+  --muted: #f2f0eb;
+  --muted-foreground: #78736b;
+  --accent: #f2f0eb;
+  --accent-foreground: #1c1a17;
 
-  /* Semantic */
-  --success: #4d6b34;
-  --success-foreground: #f4f7ee;
-  --warning: #93631a;
-  --warning-foreground: #fdf6e6;
-  --destructive: #a13a2c;
-  --destructive-foreground: #fff5f2;
-  --info: #2d6ba8;
-  --info-foreground: #f0f7fd;
+  /* Brand accent — burnt amber, used sparingly */
+  --brand: #b45309;
+  --brand-foreground: #faf9f6;
+  --brand-muted: #f6ecdd;
 
-  --border: #e7e2d6;
-  --input: #e7e2d6;
-  --ring: #d9531e;
+  /* Semantic (status + scores only) */
+  --success: #15803d;
+  --success-foreground: #f0fdf4;
+  --warning: #b45309;
+  --warning-foreground: #fffbeb;
+  --destructive: #b42318;
+  --destructive-foreground: #fef2f2;
+  --info: #1c1a17;
+  --info-foreground: #faf9f6;
+
+  --border: #e7e3db;
+  --input: #e7e3db;
+  --ring: #b45309;
 
   /* Typography */
   --font-sans: var(--font-inter), "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-serif: var(--font-fraunces), "Fraunces", Georgia, serif;
   --font-mono: var(--font-mono-jbmono), "JetBrains Mono", ui-monospace, monospace;
 
-  --shadow-color: 30 24 18;
+  --shadow-color: 28 26 23;
 }
 
 .dark {
-  --background: #1a1712;
-  --foreground: #f2ede3;
-  --card: #211d17;
-  --card-foreground: #f2ede3;
-  --popover: #211d17;
-  --popover-foreground: #f2ede3;
+  --background: #0d0c0a;
+  --foreground: #f4f1ea;
+  --card: #17150f;
+  --card-foreground: #f4f1ea;
+  --popover: #17150f;
+  --popover-foreground: #f4f1ea;
 
-  --primary: #ef7743;
-  --primary-foreground: #1a1712;
-  --secondary: #2c2620;
-  --secondary-foreground: #ece4d6;
-  --muted: #2c2620;
-  --muted-foreground: #a89e8d;
-  --accent: #38291d;
-  --accent-foreground: #f6c9a4;
+  --primary: #f4f1ea;
+  --primary-foreground: #17150f;
+  --secondary: #201d16;
+  --secondary-foreground: #e7e3db;
+  --muted: #201d16;
+  --muted-foreground: #a29a8c;
+  --accent: #201d16;
+  --accent-foreground: #f4f1ea;
 
-  --success: #8ab566;
-  --success-foreground: #17250b;
-  --warning: #d9a441;
-  --warning-foreground: #241a04;
-  --destructive: #e2685a;
-  --destructive-foreground: #250a06;
-  --info: #6fa8dc;
-  --info-foreground: #05192b;
+  --brand: #e08c3a;
+  --brand-foreground: #17150f;
+  --brand-muted: #2a2013;
 
-  --border: #362f26;
-  --input: #362f26;
-  --ring: #ef7743;
+  --success: #4ade80;
+  --success-foreground: #052e16;
+  --warning: #f0a94a;
+  --warning-foreground: #271a04;
+  --destructive: #f87171;
+  --destructive-foreground: #2a0a0a;
+  --info: #f4f1ea;
+  --info-foreground: #17150f;
+
+  --border: #2c2820;
+  --input: #2c2820;
+  --ring: #e08c3a;
 }
 
 @theme inline {
@@ -93,6 +103,9 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-muted: var(--brand-muted);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
@@ -127,13 +140,8 @@
   }
   body {
     @apply bg-background text-foreground font-sans;
-    background-image:
-      linear-gradient(rgba(34, 29, 23, 0.028) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(34, 29, 23, 0.028) 1px, transparent 1px);
-    background-size: 24px 24px;
-  }
-  .dark body {
-    background-image: none;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
 }
 
