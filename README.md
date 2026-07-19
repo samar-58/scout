@@ -53,6 +53,13 @@ bun run dev
 
 Open <http://localhost:3001>. To use another backend URL, set `NEXT_PUBLIC_API_BASE_URL` before starting Next.js.
 
+## Frontend research UX
+
+- The live research view shows all seven specialists immediately. Agents that have not received evidence yet appear as queued, then transition through running, completed, or failed states as lifecycle events arrive.
+- Search activity, query purpose, result counts, source links, agent progress, and streamed Markdown update in place while the run is active.
+- Active runs use a calm live pulse indicator instead of a continuously spinning loader.
+- Because runs are not persisted, the Back and Stop actions show a styled confirmation dialog explaining that the current progress and report will be lost. Confirming Back returns to the landing page; confirming Stop aborts the stream.
+
 ## Streaming request contract
 
 ```json
@@ -99,4 +106,4 @@ Search failures are tolerated when other searches succeed. Specialist failures e
 
 - The final Markdown is generated as one structured synthesis result and then chunked; provider token streaming is not yet exposed.
 - In-flight synchronous provider calls may not cancel immediately after the browser aborts.
-- Distributed rate limiting, persistent run state, auth, and production telemetry are intentionally outside this MVP.
+- In-memory run state is not persisted: refreshing, leaving, or stopping a run loses its progress and report; auth and production telemetry are also intentionally outside this MVP.
