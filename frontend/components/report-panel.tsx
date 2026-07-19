@@ -160,7 +160,7 @@ export function ReportPanel({
         {markdown && <ReportToolbar markdown={markdown} />}
       </div>
 
-      <div className="px-[clamp(20px,4vw,56px)] py-8">
+      <div className="px-[clamp(20px,4vw,56px)] py-6 sm:py-8">
         {markdown ? (
           <div className="flex gap-10">
             <ReportTableOfContents

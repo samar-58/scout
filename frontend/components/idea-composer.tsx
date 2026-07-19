@@ -153,7 +153,7 @@ export function IdeaComposer({
             "radial-gradient(45% 50% at 50% 0%, color-mix(in oklab, var(--brand) 9%, transparent), transparent 72%)",
         }}
       />
-      <div className="mx-auto flex min-h-[calc(100vh-3.5rem)] w-full max-w-2xl flex-col justify-center px-6 py-16 duration-500 animate-in fade-in slide-in-from-bottom-3">
+      <div className="mx-auto flex min-h-[calc(100dvh-3.5rem)] w-full max-w-2xl flex-col justify-center px-4 py-10 pb-[max(2.5rem,env(safe-area-inset-bottom))] duration-500 animate-in fade-in slide-in-from-bottom-3 sm:px-6 sm:py-16">
       <div className="text-center">
         <span className="text-[11px] font-semibold tracking-[0.16em] text-brand uppercase">
           New research run
@@ -187,7 +187,7 @@ export function IdeaComposer({
                 onChange={(event) => onUpdate(field.key, event.target.value)}
                 placeholder={field.label}
                 aria-label={field.label}
-                className="h-9 border-border/70 bg-muted/40 text-xs"
+                className="h-10 border-border/70 bg-muted/40 text-base sm:h-9 sm:text-xs"
               />
             ))}
           </div>
@@ -241,7 +241,7 @@ export function IdeaComposer({
                             placeholder={field.placeholder}
                             value={form[field.key]}
                             onChange={(event) => onUpdate(field.key, event.target.value)}
-                            className="resize-none border-border/70 bg-muted/40 text-sm"
+                            className="resize-none border-border/70 bg-muted/40 text-base sm:text-sm"
                           />
                         ) : (
                           <Input
@@ -249,7 +249,7 @@ export function IdeaComposer({
                             placeholder={field.placeholder}
                             value={form[field.key]}
                             onChange={(event) => onUpdate(field.key, event.target.value)}
-                            className="h-9 border-border/70 bg-muted/40 text-sm"
+                            className="h-10 border-border/70 bg-muted/40 text-base sm:h-9 sm:text-sm"
                           />
                         )}
                       </div>
@@ -299,7 +299,7 @@ export function IdeaComposer({
               key={example}
               type="button"
               onClick={() => onUpdate("idea", example)}
-              className="max-w-full truncate rounded-full border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
+              className="max-w-full truncate rounded-full border border-border bg-card px-3 py-2 text-xs text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground active:bg-muted"
             >
               {example}
             </button>

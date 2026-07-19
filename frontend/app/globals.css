@@ -142,6 +142,10 @@
     @apply bg-background text-foreground font-sans;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
+    /* Native app feel: no blue tap flash, no iOS text inflation on rotate. */
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
 }
 
@@ -153,5 +157,25 @@
     to {
       transform: rotate(360deg);
     }
+  }
+
+  /* Safe-area helpers for notched / gesture-bar devices. */
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .pl-safe {
+    padding-left: env(safe-area-inset-left);
+  }
+  .pr-safe {
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* Contain overscroll chaining and keep momentum scrolling inside panels. */
+  .scroll-touch {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
   }
 }

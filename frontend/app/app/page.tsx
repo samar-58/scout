@@ -111,10 +111,10 @@ export default function AppPage() {
   }
 
   return (
-    <div className="min-h-screen">
-      <header className="sticky top-0 z-20 border-b border-border bg-background/85 backdrop-blur-md">
-        <div className="mx-auto flex h-14 max-w-[1580px] items-center justify-between gap-4 px-4 sm:px-6">
-          <div className="flex min-w-0 items-center gap-3">
+    <div className="min-h-dvh">
+      <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur-md pt-safe pl-safe pr-safe">
+        <div className="mx-auto flex h-14 max-w-[1580px] items-center justify-between gap-2 px-4 sm:gap-4 sm:px-6">
+          <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
             <Link
               href="/"
               onClick={(event) => {
@@ -123,10 +123,11 @@ export default function AppPage() {
                   requestLeave();
                 }
               }}
-              className="flex shrink-0 items-center gap-2 text-muted-foreground hover:text-foreground"
+              aria-label="Back to home"
+              className="-ml-1.5 flex shrink-0 items-center gap-1.5 rounded-md p-1.5 text-muted-foreground transition-colors hover:text-foreground active:bg-muted"
             >
-              <ArrowLeft size={15} />
-              <span className="flex items-center gap-1.5">
+              <ArrowLeft size={18} />
+              <span className="hidden items-center gap-1.5 sm:flex">
                 <ScoutMark size={15} className="text-foreground" />
                 <span className="font-serif text-sm font-semibold text-foreground">
                   Scout
@@ -135,8 +136,8 @@ export default function AppPage() {
             </Link>
             {hasStarted && form.idea && (
               <>
-                <span className="text-border">/</span>
-                <p className="min-w-0 truncate text-sm text-muted-foreground">
+                <span className="hidden text-border sm:inline">/</span>
+                <p className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
                   {form.idea}
                 </p>
               </>
@@ -152,14 +153,23 @@ export default function AppPage() {
                 variant="outline"
                 size="sm"
                 onClick={requestStop}
-                className="gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10"
+                aria-label="Stop research run"
+                className="h-9 gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10"
               >
-                <Square size={12} fill="currentColor" /> Stop
+                <Square size={12} fill="currentColor" />
+                <span className="hidden sm:inline">Stop</span>
               </Button>
             )}
             {hasStarted && !isRunning && (
-              <Button type="button" size="sm" onClick={newRun} className="gap-1.5">
-                <Plus size={14} /> New
+              <Button
+                type="button"
+                size="sm"
+                onClick={newRun}
+                aria-label="Start a new research run"
+                className="h-9 gap-1.5"
+              >
+                <Plus size={14} />
+                <span className="hidden sm:inline">New</span>
               </Button>
             )}
           </div>
@@ -181,7 +191,7 @@ export default function AppPage() {
           isRunning={isRunning}
         />
       ) : (
-        <main className="mx-auto grid w-full max-w-[1580px] items-start gap-5 p-4 duration-500 animate-in fade-in sm:p-6 lg:grid-cols-[minmax(320px,380px)_minmax(0,1fr)]">
+        <main className="mx-auto grid w-full max-w-[1580px] items-start gap-4 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] duration-500 animate-in fade-in sm:gap-5 sm:p-6 lg:grid-cols-[minmax(320px,380px)_minmax(0,1fr)]">
           <ResearchActivity
             agents={agents}
             searches={searches}
