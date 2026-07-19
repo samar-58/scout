@@ -1,11 +1,13 @@
 import os
 from typing import Any, Literal
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 import uvicorn
+
 from graph import graph
 from langchain_core.messages import HumanMessage
 
@@ -19,13 +21,16 @@ from startup_graph import (
     run_startup_stress_test_v2,
     stream_startup_stress_test_v2,
 )
+
+load_dotenv()
+
 app = FastAPI(
     title="Multi agent tutorial",
     version="1.0.0"
 )
 
 frontend_origins = [
-    origin.strip()
+    origin.strip().rstrip("/")
     for origin in os.getenv(
         "FRONTEND_ORIGINS",
         "http://localhost:3001,http://127.0.0.1:3001",

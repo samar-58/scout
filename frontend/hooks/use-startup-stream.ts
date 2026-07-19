@@ -11,9 +11,9 @@ import type {
   SearchEvent,
 } from "@/lib/types";
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ??
-  "http://localhost:8000";
+const API_BASE_URL = (
+  process.env.NEXT_PUBLIC_API_BASE_URL?.trim() || "http://localhost:3000"
+).replace(/\/$/, "");
 
 export type RunOutcome = "idle" | "running" | "done" | "cancelled" | "error";
 
