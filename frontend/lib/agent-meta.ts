@@ -8,6 +8,7 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react";
+import type { AgentEvent } from "@/lib/types";
 
 export interface AgentMeta {
   id: string;
@@ -122,4 +123,32 @@ export function agentMeta(id: string): AgentMeta {
       fill: FILL,
     }
   );
+}
+
+/**
+ * Merge live agent events over a baseline of all seven known specialists so the
+ * timeline is never empty. Specialists that haven't reported yet render as
+ * `queued` placeholders and animate into running/completed as events arrive.
+ */
+export function withQueuedAgents(live: AgentEvent[]): AgentEvent[] {
+  const byId = new Map(live.map((event) => [event.agent, event]));
+
+  const merged: AgentEvent[] = AGENT_ORDER.map((id) => {
+    const existing = byId.get(id);
+    if (existing) return existing;
+    return {
+      type: "agent_status",
+      agent: id,
+      display_name: AGENT_META[id].label,
+      status: "queued",
+      message: "Waiting for research evidence…",
+    };
+  });
+
+  // Preserve any live agent not covered by the known ordering.
+  for (const event of live) {
+    if (!AGENT_ORDER.includes(event.agent)) merged.push(event);
+  }
+
+  return merged;
 }

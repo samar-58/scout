@@ -1,7 +1,7 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
 import { AgentTimeline } from "@/components/agent-timeline";
+import { LivePulse } from "@/components/live-pulse";
 import { SearchActivityPanel } from "@/components/search-activity-panel";
 import { cn } from "@/lib/utils";
 import type { AgentEvent, SearchEvent } from "@/lib/types";
@@ -50,7 +50,7 @@ export function LiveResearch({
         <div className="flex items-center gap-3">
           <span className="grid h-10 w-10 place-items-center rounded-full border border-border bg-card">
             {isRunning ? (
-              <Loader2 size={18} className="animate-spin text-brand" />
+              <LivePulse size={12} />
             ) : (
               <span className="h-2.5 w-2.5 rounded-full bg-success" />
             )}

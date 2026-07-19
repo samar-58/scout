@@ -67,9 +67,9 @@ const PROSE_CLASSES = [
   "prose-strong:text-foreground prose-strong:font-semibold",
   "prose-blockquote:border-l-2 prose-blockquote:border-brand prose-blockquote:not-italic prose-blockquote:text-foreground/70",
   "prose-code:font-mono prose-code:text-[0.85em] prose-code:before:content-none prose-code:after:content-none",
-  "prose-table:block prose-table:overflow-x-auto prose-table:text-sm",
-  "prose-th:border prose-th:border-border prose-th:bg-muted prose-th:p-2.5 prose-th:font-semibold prose-th:text-left",
-  "prose-td:border prose-td:border-border prose-td:p-2.5",
+  "prose-table:w-full prose-table:break-normal",
+  "prose-th:border prose-th:border-border prose-th:bg-muted prose-th:p-2.5 prose-th:font-semibold prose-th:text-left prose-th:break-normal",
+  "prose-td:border prose-td:border-border prose-td:p-2.5 prose-td:align-top prose-td:break-normal",
 ].join(" ");
 
 export function ReportPanel({
@@ -87,6 +87,35 @@ export function ReportPanel({
   const articleRef = useRef<HTMLDivElement>(null);
   const headings = useMemo(() => extractHeadings(markdown), [markdown]);
   const headingComponents = useHeadingComponents();
+  const markdownComponents: Components = {
+    ...headingComponents,
+    table: ({ children }) => (
+      <div className="my-6 overflow-x-auto">
+        <table
+          className="w-full min-w-[900px] table-fixed break-normal"
+          style={{ overflowWrap: "normal", wordBreak: "normal" }}
+        >
+          {children}
+        </table>
+      </div>
+    ),
+    th: ({ children }) => (
+      <th
+        className="break-normal border border-border bg-muted p-2.5 text-left font-semibold"
+        style={{ overflowWrap: "normal", wordBreak: "normal" }}
+      >
+        {children}
+      </th>
+    ),
+    td: ({ children }) => (
+      <td
+        className="break-normal border border-border p-2.5 align-top"
+        style={{ overflowWrap: "normal", wordBreak: "normal" }}
+      >
+        {children}
+      </td>
+    ),
+  };
 
   useEffect(() => {
     const container = articleRef.current;
@@ -148,7 +177,7 @@ export function ReportPanel({
               <article ref={articleRef} className={PROSE_CLASSES}>
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
-                  components={headingComponents}
+                  components={markdownComponents}
                 >
                   {markdown}
                 </ReactMarkdown>

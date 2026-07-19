@@ -3,6 +3,7 @@
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { useMemo, useState } from "react";
+import { withQueuedAgents } from "@/lib/agent-meta";
 import type {
   AgentEvent,
   ReportEvent,
@@ -77,7 +78,7 @@ export function useStartupStream() {
     }
 
     return {
-      agents: [...agentMap.values()],
+      agents: withQueuedAgents([...agentMap.values()]),
       searches: [...searchMap.values()].sort(
         (left, right) => (left.index ?? 0) - (right.index ?? 0),
       ),

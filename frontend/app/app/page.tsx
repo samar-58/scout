@@ -1,9 +1,21 @@
 "use client";
 
-import { ArrowLeft, LoaderCircle, Plus, Square } from "lucide-react";
+import { ArrowLeft, Plus, Square } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { IdeaComposer } from "@/components/idea-composer";
+import { LivePulse } from "@/components/live-pulse";
 import { LiveResearch } from "@/components/live-research";
 import { ReportPanel } from "@/components/report-panel";
 import { ResearchActivity } from "@/components/research-activity";
@@ -37,13 +49,14 @@ function StatusPill({
         STATUS_STYLES[displayStatus] ?? "border-border bg-muted text-muted-foreground",
       )}
     >
-      {isRunning && <LoaderCircle className="spin" size={12} />}
+      {isRunning && <LivePulse size={10} />}
       {displayStatus}
     </span>
   );
 }
 
 export default function AppPage() {
+  const router = useRouter();
   const [form, setForm] = useState<StartupFormState>(initialFormState);
   const [hasStarted, setHasStarted] = useState(false);
   const {
@@ -74,8 +87,27 @@ export default function AppPage() {
     await submit(readablePrompt(payload), { startup: payload });
   }
 
+  const [pendingAction, setPendingAction] = useState<"leave" | "stop" | null>(
+    null,
+  );
+
   function newRun() {
     setHasStarted(false);
+  }
+
+  function requestLeave() {
+    if (!hasStarted) return;
+    setPendingAction("leave");
+  }
+
+  function requestStop() {
+    setPendingAction("stop");
+  }
+
+  function confirmPendingAction() {
+    if (pendingAction === "stop") cancelRun();
+    if (pendingAction === "leave") router.push("/");
+    setPendingAction(null);
   }
 
   return (
@@ -85,6 +117,12 @@ export default function AppPage() {
           <div className="flex min-w-0 items-center gap-3">
             <Link
               href="/"
+              onClick={(event) => {
+                if (hasStarted) {
+                  event.preventDefault();
+                  requestLeave();
+                }
+              }}
               className="flex shrink-0 items-center gap-2 text-muted-foreground hover:text-foreground"
             >
               <ArrowLeft size={15} />
@@ -113,7 +151,7 @@ export default function AppPage() {
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={cancelRun}
+                onClick={requestStop}
                 className="gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10"
               >
                 <Square size={12} fill="currentColor" /> Stop
@@ -157,6 +195,36 @@ export default function AppPage() {
           />
         </main>
       )}
+
+      <AlertDialog
+        open={pendingAction !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingAction(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendingAction === "stop"
+                ? "Stop this research run?"
+                : "Leave this research run?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Nothing is stored. If you {pendingAction === "stop" ? "stop" : "leave"}{" "}
+              now, this progress and report will be lost for good.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep researching</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmPendingAction}
+              className="bg-destructive text-white hover:bg-destructive/90"
+            >
+              {pendingAction === "stop" ? "Stop run" : "Leave anyway"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

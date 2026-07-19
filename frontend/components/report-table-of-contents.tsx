@@ -26,7 +26,8 @@ export function ReportTableOfContents({
   return (
     <nav
       aria-label="Report sections"
-      className="hidden shrink-0 basis-[210px] self-start lg:sticky lg:top-24 lg:flex lg:h-[calc(100vh-7.5rem)] lg:flex-col"
+      className="hidden w-[210px] shrink-0 self-start rounded-lg border border-border bg-secondary/30 p-3 lg:sticky lg:top-24 lg:z-10 lg:block"
+      style={{ position: "sticky", top: "6rem", alignSelf: "flex-start" }}
     >
       <p className="mb-3 flex items-baseline justify-between text-[10px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
         On this page
@@ -35,7 +36,7 @@ export function ReportTableOfContents({
         </span>
       </p>
 
-      <ul className="min-h-0 flex-1 space-y-0.5 overflow-y-auto border-l border-border">
+      <ul className="space-y-0.5 border-l border-border pr-1">
         {sections.map((heading) => {
           const isActive = activeSlug === heading.slug;
           return (
