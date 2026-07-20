@@ -42,17 +42,17 @@ export function ScoreBreakdown({ score }: { score: ScoreEvent }) {
 
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-secondary/40">
-      <div className="flex items-end justify-between gap-4 border-b border-border px-5 py-4">
-        <div>
+      <div className="flex flex-col gap-3 border-b border-border px-4 py-4 sm:flex-row sm:items-end sm:justify-between sm:gap-4 sm:px-5">
+        <div className="min-w-0">
           <span className="text-[10px] font-semibold tracking-[0.16em] text-brand uppercase">
             Scout verdict
           </span>
-          <h3 className="font-serif text-base font-semibold">
+          <h3 className="font-serif text-[15px] font-semibold leading-snug sm:text-base">
             {verdictLabel(score.scores.overall)} · scored across six dimensions
           </h3>
         </div>
         <div className="flex shrink-0 items-baseline">
-          <strong className="font-serif text-[2.5rem] leading-none font-semibold tabular-nums">
+          <strong className="font-serif text-[2.25rem] leading-none font-semibold tabular-nums sm:text-[2.5rem]">
             {score.scores.overall}
           </strong>
           <span className="ml-1 font-mono text-[11px] text-muted-foreground">
@@ -61,9 +61,9 @@ export function ScoreBreakdown({ score }: { score: ScoreEvent }) {
         </div>
       </div>
 
-      <div className="space-y-2.5 px-5 py-4">
+      <div className="space-y-2.5 px-4 py-4 sm:px-5">
         {dimensions.map(({ key, label, value }) => (
-          <div key={key} className="grid grid-cols-[104px_1fr_32px] items-center gap-3">
+          <div key={key} className="grid grid-cols-[84px_1fr_32px] items-center gap-3 sm:grid-cols-[104px_1fr_32px]">
             <span className="text-[12px] font-medium text-foreground/80">
               {label}
             </span>
@@ -86,21 +86,21 @@ export function ScoreBreakdown({ score }: { score: ScoreEvent }) {
           <CollapsibleTrigger asChild>
             <button
               type="button"
-              className="flex w-full items-center justify-between px-5 py-3 text-[11px] font-semibold tracking-wide text-muted-foreground transition-colors hover:text-foreground"
+              className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-[11px] font-semibold tracking-wide text-muted-foreground transition-colors hover:text-foreground sm:px-5"
             >
               Why each dimension scored this way
               <ChevronDown
                 size={14}
-                className="transition-transform group-data-[state=open]:rotate-180"
+                className="shrink-0 transition-transform group-data-[state=open]:rotate-180"
               />
             </button>
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <dl className="space-y-3 border-t border-border px-5 py-4">
+            <dl className="space-y-3 border-t border-border px-4 py-4 sm:px-5">
               {dimensions
                 .filter((d) => d.value?.rationale)
                 .map(({ key, label, value }) => (
-                  <div key={key} className="grid grid-cols-[104px_1fr] gap-3">
+                  <div key={key} className="grid gap-1 sm:grid-cols-[104px_1fr] sm:gap-3">
                     <dt className="flex items-baseline gap-1.5">
                       <span className="text-[12px] font-semibold text-foreground">
                         {label}

@@ -55,8 +55,8 @@ const PROSE_CLASSES = [
   "text-[15px] leading-[1.75] [overflow-wrap:anywhere]",
   // Serif display headings, sans body — editorial reading experience.
   "prose-headings:font-serif prose-headings:font-semibold prose-headings:tracking-tight prose-headings:scroll-mt-24",
-  "prose-h1:text-[2rem] prose-h1:leading-tight prose-h1:mb-6",
-  "prose-h2:mt-12 prose-h2:mb-4 prose-h2:border-t prose-h2:border-border prose-h2:pt-8 prose-h2:text-[1.4rem]",
+  "prose-h1:text-[1.6rem] sm:prose-h1:text-[2rem] prose-h1:leading-tight prose-h1:mb-6",
+  "prose-h2:mt-12 prose-h2:mb-4 prose-h2:border-t prose-h2:border-border prose-h2:pt-8 prose-h2:text-[1.2rem] sm:prose-h2:text-[1.4rem]",
   "prose-h3:text-lg prose-h3:mt-8",
   // The report opens with an h2 — strip its top rule/margin so it doesn't
   // start with a stray divider.
@@ -90,9 +90,9 @@ export function ReportPanel({
   const markdownComponents: Components = {
     ...headingComponents,
     table: ({ children }) => (
-      <div className="my-6 overflow-x-auto">
+      <div className="scroll-touch my-6 overflow-x-auto rounded-lg border border-border">
         <table
-          className="w-full min-w-[900px] table-fixed break-normal"
+          className="w-full min-w-[560px] table-fixed break-normal sm:min-w-[900px]"
           style={{ overflowWrap: "normal", wordBreak: "normal" }}
         >
           {children}
