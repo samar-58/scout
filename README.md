@@ -94,7 +94,7 @@ Open <http://localhost:3001>. Restart Next.js after changing `NEXT_PUBLIC_API_BA
 - **Startup composer:** captures the idea plus optional problem, target customer, geography, business model, current alternatives, customer pain, proposed solution, GTM constraints, pricing hypothesis, stage, traction, team context, and known competitors.
 - **Live research:** shows all seven specialists immediately as queued placeholders. They transition through running, completed, or failed states as lifecycle events arrive. Search cards show purpose, query, result count, timing, errors, and source links.
 - **Progress feedback:** the main active-run indicator uses a calm live pulse; status counters show agent and search progress without blocking the page.
-- **Report view:** renders streamed Markdown with score breakdown, navigable headings, verified source links, Copy, and Download Markdown actions.
+- **Report view:** renders streamed Markdown with score breakdown, navigable headings, verified source links, Copy, and Download Markdown actions. The layout is fully mobile responsive: the score breakdown and rationale reflow to a single column on small screens, headings scale down, wide tables scroll horizontally within a bordered container, and the research-activity panel collapses so the report stays front and centre.
 - **Run controls:** Back and Stop open a styled warning dialog because runs are not persisted. The dialog explains that leaving or stopping loses the current progress/report; confirming Back returns home and confirming Stop aborts the stream.
 
 ## Backend API
