@@ -20,11 +20,13 @@ import { LiveResearch } from "@/components/live-research";
 import { ReportPanel } from "@/components/report-panel";
 import { ResearchActivity } from "@/components/research-activity";
 import { ScoutMark } from "@/components/scout-logo";
+import { StartupCanvas } from "@/components/canvas/startup-canvas";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useStartupStream } from "@/hooks/use-startup-stream";
 import { initialFormState, readablePrompt, toPayload } from "@/lib/startup-form";
 import { cn } from "@/lib/utils";
-import type { StartupFormState } from "@/lib/types";
+import type { StartupFormState, StartupPayload } from "@/lib/types";
 
 const STATUS_STYLES: Record<string, string> = {
   streaming: "border-border bg-muted text-foreground",
@@ -59,11 +61,13 @@ export default function AppPage() {
   const router = useRouter();
   const [form, setForm] = useState<StartupFormState>(initialFormState);
   const [hasStarted, setHasStarted] = useState(false);
+  const [submittedPayload, setSubmittedPayload] = useState<StartupPayload>();
   const {
     agents,
     searches,
     sources,
     score,
+    report,
     markdown,
     isRunning,
     displayStatus,
@@ -71,6 +75,12 @@ export default function AppPage() {
     submit,
     cancelRun,
   } = useStartupStream();
+
+  // The structured payload only arrives with the terminal run_end event, so the
+  // canvas mounts once the run completes; until then the streaming Markdown is
+  // the only thing worth showing.
+  const structuredReport =
+    report?.status === "completed" ? report.report : undefined;
 
   function update<K extends keyof StartupFormState>(
     field: K,
@@ -83,6 +93,7 @@ export default function AppPage() {
     event.preventDefault();
     const payload = toPayload(form);
     if (!payload.idea || isRunning) return;
+    setSubmittedPayload(payload);
     setHasStarted(true);
     await submit(readablePrompt(payload), { startup: payload });
   }
@@ -197,12 +208,37 @@ export default function AppPage() {
             searches={searches}
             isRunning={isRunning}
           />
-          <ReportPanel
-            markdown={markdown}
-            score={score}
-            sources={sources}
-            isRunning={isRunning}
-          />
+          {structuredReport ? (
+            <Tabs defaultValue="workspace" className="min-w-0">
+              <TabsList variant="line" className="mb-1">
+                <TabsTrigger value="workspace">Workspace</TabsTrigger>
+                <TabsTrigger value="report">Full report</TabsTrigger>
+              </TabsList>
+              <TabsContent value="workspace">
+                <StartupCanvas
+                  report={structuredReport}
+                  payload={submittedPayload}
+                  score={score}
+                  sources={sources}
+                />
+              </TabsContent>
+              <TabsContent value="report">
+                <ReportPanel
+                  markdown={markdown}
+                  score={score}
+                  sources={sources}
+                  isRunning={isRunning}
+                />
+              </TabsContent>
+            </Tabs>
+          ) : (
+            <ReportPanel
+              markdown={markdown}
+              score={score}
+              sources={sources}
+              isRunning={isRunning}
+            />
+          )}
         </main>
       )}
 

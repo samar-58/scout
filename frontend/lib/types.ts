@@ -1,3 +1,5 @@
+import type { StructuredReport } from "@/lib/report-types";
+
 export type AgentStatus = "queued" | "running" | "completed" | "failed";
 
 export interface AgentEvent {
@@ -55,7 +57,7 @@ export interface ScoreEvent {
 export interface ReportEvent {
   status: "completed" | "failed";
   elapsed_ms?: number;
-  report?: Record<string, unknown>;
+  report?: StructuredReport;
 }
 
 export interface Source {
