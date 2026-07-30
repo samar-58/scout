@@ -1,103 +1,100 @@
 "use client";
 
+import { ChevronDown, Radar } from "lucide-react";
 import { useState } from "react";
-import { ChevronDown } from "lucide-react";
 import { AgentTimeline } from "@/components/agent-timeline";
-import { LivePulse } from "@/components/live-pulse";
 import { SearchActivityPanel } from "@/components/search-activity-panel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import type { AgentEvent, SearchEvent } from "@/lib/types";
 
+/**
+ * Provenance drawer for a finished run.
+ *
+ * While a run is live this content is the main event (see `LiveResearch`).
+ * Afterwards it becomes an audit trail — worth keeping, not worth a permanent
+ * sidebar next to the canvas — so it collapses at every breakpoint and sits
+ * below the workspace.
+ */
 export function ResearchActivity({
   agents,
   searches,
-  isRunning,
 }: {
   agents: AgentEvent[];
   searches: SearchEvent[];
-  isRunning: boolean;
 }) {
-  // Collapsed by default on mobile so the report is front-and-centre; the
-  // desktop sidebar (lg+) is always expanded regardless of this state.
   const [open, setOpen] = useState(false);
 
-  const agentsDone = agents.filter((a) => a.status === "completed").length;
-  const searchesDone = searches.filter((s) => s.status === "completed").length;
+  const agentsDone = agents.filter(
+    (agent) => agent.status === "completed" || agent.status === "failed",
+  ).length;
+  const searchesDone = searches.filter(
+    (search) => search.status === "completed",
+  ).length;
 
   return (
-    <section className="flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm lg:sticky lg:top-[76px] lg:max-h-[calc(100dvh-92px)]">
+    <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-xs">
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
-        className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 text-left transition-colors active:bg-muted lg:pointer-events-none lg:cursor-default"
+        className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left transition-colors hover:bg-muted/50"
       >
-        <div className="flex min-w-0 items-center gap-2">
-          {isRunning ? (
-            <LivePulse size={10} />
-          ) : (
-            <span className="h-2 w-2 shrink-0 rounded-full bg-success" />
-          )}
-          <h2 className="truncate font-serif text-sm font-semibold">
-            Research activity
-          </h2>
-        </div>
-        <div className="flex shrink-0 items-center gap-2.5">
-          <span className="font-mono text-[10px] text-muted-foreground">
-            <span className="lg:hidden">
-              {agentsDone + searchesDone}/{7 + (searches.length || 8)}
-            </span>
-            <span className="hidden lg:inline">{isRunning ? "live" : "done"}</span>
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-border bg-surface-sunken text-muted-foreground">
+            <Radar size={15} strokeWidth={1.9} />
           </span>
-          <ChevronDown
-            size={16}
-            className={cn(
-              "text-muted-foreground transition-transform lg:hidden",
-              open && "rotate-180",
-            )}
-          />
+          <div className="min-w-0">
+            <h2 className="text-[13.5px] font-semibold">How this was researched</h2>
+            <p className="mt-0.5 truncate text-[12px] text-muted-foreground">
+              {searchesDone} searches · {agentsDone} specialist reports · every
+              query and source
+            </p>
+          </div>
         </div>
+        <ChevronDown
+          size={16}
+          className={cn(
+            "shrink-0 text-muted-foreground transition-transform",
+            open && "rotate-180",
+          )}
+        />
       </button>
 
-      <div
-        className={cn(
-          "min-h-0 flex-1 flex-col lg:flex",
-          open ? "flex" : "hidden",
-        )}
-      >
-        <Tabs defaultValue="agents" className="flex min-h-0 flex-1 flex-col gap-0">
-          <div className="px-3 pt-3">
-            <TabsList className="h-11 w-full lg:h-9">
-              <TabsTrigger value="agents" className="flex-1 text-sm lg:text-xs">
-                Agents
-                <span className="ml-1 font-mono text-[10px] text-muted-foreground">
-                  {agentsDone}/{agents.length || 7}
-                </span>
-              </TabsTrigger>
-              <TabsTrigger value="search" className="flex-1 text-sm lg:text-xs">
-                Search
-                <span className="ml-1 font-mono text-[10px] text-muted-foreground">
-                  {searchesDone}/{searches.length || 8}
-                </span>
-              </TabsTrigger>
-            </TabsList>
-          </div>
-
-          <TabsContent
-            value="agents"
-            className="scroll-touch max-h-[55dvh] min-h-0 flex-1 overflow-auto px-4 pt-4 pb-4 lg:max-h-none"
-          >
-            <AgentTimeline agents={agents} bare />
-          </TabsContent>
-          <TabsContent
-            value="search"
-            className="scroll-touch max-h-[55dvh] min-h-0 flex-1 overflow-auto px-4 pt-4 pb-4 lg:max-h-none"
-          >
-            <SearchActivityPanel searches={searches} bare />
-          </TabsContent>
-        </Tabs>
-      </div>
+      {open && (
+        <div className="border-t border-border">
+          <Tabs defaultValue="agents" className="gap-0">
+            <div className="px-3 pt-3">
+              <TabsList className="h-10 w-full">
+                <TabsTrigger value="agents" className="flex-1 text-[13px]">
+                  Specialists
+                  <span className="ml-1 font-mono text-[10px] text-muted-foreground">
+                    {agentsDone}/{agents.length || 7}
+                  </span>
+                </TabsTrigger>
+                <TabsTrigger value="search" className="flex-1 text-[13px]">
+                  Searches
+                  <span className="ml-1 font-mono text-[10px] text-muted-foreground">
+                    {searchesDone}/{searches.length || 8}
+                  </span>
+                </TabsTrigger>
+              </TabsList>
+            </div>
+            <TabsContent
+              value="agents"
+              className="scroll-touch max-h-[60dvh] overflow-auto p-4"
+            >
+              <AgentTimeline agents={agents} bare />
+            </TabsContent>
+            <TabsContent
+              value="search"
+              className="scroll-touch max-h-[60dvh] overflow-auto p-4"
+            >
+              <SearchActivityPanel searches={searches} bare />
+            </TabsContent>
+          </Tabs>
+        </div>
+      )}
     </section>
   );
 }

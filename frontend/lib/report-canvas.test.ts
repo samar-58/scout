@@ -199,4 +199,65 @@ describe("buildCanvasModel", () => {
     expect(partial.experiments).toHaveLength(0);
     expect(partial.assumptions).toHaveLength(0);
   });
+
+  test("derives six chart-indexed dimensions in a stable axis order", () => {
+    expect(model.dimensions.map((dimension) => dimension.key)).toEqual([
+      "market",
+      "competition",
+      "distribution",
+      "execution",
+      "timing",
+      "monetization",
+    ]);
+    expect(model.dimensions.map((dimension) => dimension.chartIndex)).toEqual([
+      1, 2, 3, 4, 5, 6,
+    ]);
+    expect(model.dimensions[0].rationale).toBe("Large fragmented base.");
+  });
+
+  test("clamps dimension scores into the 0-10 radar range", () => {
+    const clamped = buildCanvasModel({
+      scores: {
+        overall: 50,
+        market: { score: 42 },
+        competition: { score: -8 },
+      },
+    });
+    expect(clamped.dimensions.map((dimension) => dimension.score)).toEqual([
+      10, 0,
+    ]);
+  });
+
+  test("omits dimensions the report never scored", () => {
+    const sparse = buildCanvasModel({
+      scores: { overall: 40, market: { score: 6 } },
+    });
+    expect(sparse.dimensions).toHaveLength(1);
+    expect(sparse.dimensions[0].key).toBe("market");
+  });
+
+  test("surfaces per-agent notes with readable labels", () => {
+    const withNotes = buildCanvasModel({
+      agent_notes: {
+        market_analyst: "Fragmented but growing.",
+        gtm_agent: "  ",
+        unknown_role: "Still useful.",
+      },
+    });
+    expect(withNotes.analystNotes).toEqual([
+      {
+        agent: "market_analyst",
+        label: "Market Analyst",
+        note: "Fragmented but growing.",
+      },
+      { agent: "unknown_role", label: "Unknown Role", note: "Still useful." },
+    ]);
+  });
+
+  test("carries the score explanation through for the hero disclosure", () => {
+    expect(
+      buildCanvasModel({ score_explanation: "Distribution cost 12 points." })
+        .scoreExplanation,
+    ).toBe("Distribution cost 12 points.");
+  });
 });

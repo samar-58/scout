@@ -1,7 +1,13 @@
 "use client";
 
-import { AlertCircle, ArrowRight, ChevronDown, Loader2 } from "lucide-react";
-import { FormEvent } from "react";
+import {
+  AlertCircle,
+  ArrowRight,
+  ChevronDown,
+  Loader2,
+  RotateCcw,
+} from "lucide-react";
+import { FormEvent, useRef } from "react";
 import {
   Collapsible,
   CollapsibleContent,
@@ -112,12 +118,22 @@ const ADVANCED_GROUPS: {
   },
 ];
 
+const IDEA_MAX_LENGTH = 2000;
+
+/** Fields beyond the idea itself; used for the context-strength readout. */
+const CONTEXT_FIELD_COUNT =
+  PRIMARY_FIELDS.length +
+  ADVANCED_GROUPS.reduce((total, group) => total + group.fields.length, 0);
+
 export function IdeaComposer({
   form,
   onUpdate,
   onSubmit,
   isRunning,
   error,
+  draftRestored = false,
+  onClearDraft,
+  onDismissRestored,
 }: {
   form: StartupFormState;
   onUpdate: <K extends keyof StartupFormState>(
@@ -127,7 +143,28 @@ export function IdeaComposer({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   isRunning: boolean;
   error?: string;
+  draftRestored?: boolean;
+  onClearDraft?: () => void;
+  onDismissRestored?: () => void;
 }) {
+  const formRef = useRef<HTMLFormElement>(null);
+
+  const contextFilled = (
+    [
+      ...PRIMARY_FIELDS.map((field) => field.key),
+      ...ADVANCED_GROUPS.flatMap((group) => group.fields.map((field) => field.key)),
+    ] as (keyof StartupFormState)[]
+  ).filter((key) => form[key].trim().length > 0).length;
+
+  // ⌘/Ctrl+Enter submits from inside the textarea, where plain Enter must stay
+  // a newline.
+  function handleIdeaKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault();
+      formRef.current?.requestSubmit();
+    }
+  }
+
   return (
     <div className="relative overflow-hidden">
       {/* Faded grid backdrop */}
@@ -167,15 +204,40 @@ export function IdeaComposer({
         </p>
       </div>
 
-      <form onSubmit={onSubmit} className="mt-8">
+      {draftRestored && (
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-3.5 py-2.5">
+          <p className="text-[12.5px] text-muted-foreground">
+            Restored the draft you left here last time.
+          </p>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={onClearDraft}
+              className="rounded-md px-2 py-1 text-[12px] font-medium text-foreground/70 transition-colors hover:bg-muted hover:text-foreground"
+            >
+              Start blank
+            </button>
+            <button
+              type="button"
+              onClick={onDismissRestored}
+              className="rounded-md px-2 py-1 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              Keep it
+            </button>
+          </div>
+        </div>
+      )}
+
+      <form ref={formRef} onSubmit={onSubmit} className="mt-8">
         <div className="rounded-2xl border border-border bg-card p-2 shadow-sm focus-within:border-foreground/40">
           <Textarea
             required
             autoFocus
-            maxLength={2000}
+            maxLength={IDEA_MAX_LENGTH}
             rows={4}
             value={form.idea}
             onChange={(event) => onUpdate("idea", event.target.value)}
+            onKeyDown={handleIdeaKeyDown}
             placeholder="An AI copilot that helps small CPA firms close their books faster…"
             className="resize-none border-0 bg-transparent px-3 py-2.5 text-base shadow-none focus-visible:ring-0"
           />
@@ -190,6 +252,29 @@ export function IdeaComposer({
                 className="h-10 border-border/70 bg-muted/40 text-base sm:h-9 sm:text-xs"
               />
             ))}
+          </div>
+          <div className="flex items-center justify-between gap-3 px-2 pt-2 pb-1">
+            <p className="text-[11px] text-muted-foreground">
+              <span className="font-mono">{contextFilled}</span> of{" "}
+              <span className="font-mono">{CONTEXT_FIELD_COUNT}</span> context
+              fields filled
+              <span className="hidden sm:inline">
+                {" "}
+                · more context, sharper research
+              </span>
+            </p>
+            {form.idea.length > IDEA_MAX_LENGTH * 0.75 && (
+              <span
+                className={cn(
+                  "shrink-0 font-mono text-[11px] tabular-nums",
+                  form.idea.length >= IDEA_MAX_LENGTH
+                    ? "text-destructive"
+                    : "text-muted-foreground",
+                )}
+              >
+                {form.idea.length}/{IDEA_MAX_LENGTH}
+              </span>
+            )}
           </div>
         </div>
 
@@ -287,6 +372,29 @@ export function IdeaComposer({
             </>
           )}
         </Button>
+
+        <div className="mt-2.5 flex items-center justify-between gap-3">
+          <p className="text-[11px] text-muted-foreground">
+            Press{" "}
+            <kbd className="rounded border border-border bg-muted px-1 py-0.5 font-mono text-[10px]">
+              ⌘
+            </kbd>
+            <kbd className="ml-0.5 rounded border border-border bg-muted px-1 py-0.5 font-mono text-[10px]">
+              ↵
+            </kbd>{" "}
+            to start · takes a few minutes
+          </p>
+          {contextFilled + (form.idea.trim() ? 1 : 0) > 0 && onClearDraft && (
+            <button
+              type="button"
+              onClick={onClearDraft}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <RotateCcw size={11} />
+              Reset
+            </button>
+          )}
+        </div>
       </form>
 
       <div className="mt-8">

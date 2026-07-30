@@ -10,6 +10,7 @@
 import type {
   ReportExperiment,
   ReportRisk,
+  ReportScores,
   StructuredReport,
 } from "@/lib/report-types";
 import type { StartupPayload } from "@/lib/types";
@@ -77,12 +78,31 @@ export interface CanvasEvidence {
   unknown: EvidenceItem[];
 }
 
+export interface CanvasDimension {
+  key: string;
+  label: string;
+  score: number;
+  rationale?: string;
+  evidence?: string;
+  /** 1-6, maps to the --chart-N analytical palette. */
+  chartIndex: number;
+}
+
+export interface AnalystNote {
+  agent: string;
+  label: string;
+  note: string;
+}
+
 export interface StartupCanvasModel {
   decision: CanvasDecision;
+  dimensions: CanvasDimension[];
   thesis: ThesisCard[];
   assumptions: CanvasAssumption[];
   experiments: CanvasExperiment[];
   evidence: CanvasEvidence;
+  analystNotes: AnalystNote[];
+  scoreExplanation?: string;
 }
 
 const DECISION_BANDS: {
@@ -400,6 +420,73 @@ export function deriveEvidence(report: StructuredReport): CanvasEvidence {
   return { supporting, contradicting, unknown };
 }
 
+/**
+ * Fixed order and colour assignment for the six scored dimensions. The order is
+ * the radar's axis order, so it must stay stable — a chart whose axes move
+ * between runs cannot be compared against itself.
+ */
+const DIMENSION_ORDER: { key: keyof ReportScores; label: string }[] = [
+  { key: "market", label: "Market" },
+  { key: "competition", label: "Competition" },
+  { key: "distribution", label: "Distribution" },
+  { key: "execution", label: "Execution" },
+  { key: "timing", label: "Timing" },
+  { key: "monetization", label: "Monetization" },
+];
+
+export function deriveDimensions(report: StructuredReport): CanvasDimension[] {
+  const scores = report.scores;
+  if (!scores) return [];
+
+  const dimensions: CanvasDimension[] = [];
+  DIMENSION_ORDER.forEach((entry, index) => {
+    const dimension = scores[entry.key];
+    if (typeof dimension !== "object" || dimension === null) return;
+    dimensions.push({
+      key: String(entry.key),
+      label: entry.label,
+      score: Math.max(0, Math.min(10, dimension.score ?? 0)),
+      rationale: clean(dimension.rationale),
+      evidence: clean(dimension.evidence),
+      chartIndex: index + 1,
+    });
+  });
+  return dimensions;
+}
+
+const AGENT_LABELS: Record<string, string> = {
+  market_analyst: "Market Analyst",
+  competitor_analyst: "Competitor Analyst",
+  customer_analyst: "Customer Analyst",
+  gtm_agent: "GTM Agent",
+  vc_partner: "VC Partner",
+  moat_agent: "Moat Agent",
+  experiment_agent: "Experiment Agent",
+  synthesizer: "Synthesis",
+};
+
+function titleCase(value: string) {
+  return value
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+/**
+ * Each specialist's own summary. These used to be visible only inside the
+ * Markdown report; with the report view gone they surface here so removing it
+ * costs the founder nothing.
+ */
+export function deriveAnalystNotes(report: StructuredReport): AnalystNote[] {
+  const notes = report.agent_notes ?? {};
+  return Object.entries(notes)
+    .map(([agent, note]) => ({
+      agent,
+      label: AGENT_LABELS[agent] ?? titleCase(agent),
+      note: clean(note) ?? "",
+    }))
+    .filter((entry) => entry.note.length > 0);
+}
+
 export function buildCanvasModel(
   report: StructuredReport,
   payload?: StartupPayload,
@@ -407,9 +494,12 @@ export function buildCanvasModel(
   const experiments = deriveExperiments(report);
   return {
     decision: deriveDecision(report),
+    dimensions: deriveDimensions(report),
     thesis: deriveThesis(report, payload),
     assumptions: deriveAssumptions(report, experiments),
     experiments,
     evidence: deriveEvidence(report),
+    analystNotes: deriveAnalystNotes(report),
+    scoreExplanation: clean(report.score_explanation),
   };
 }

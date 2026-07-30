@@ -28,8 +28,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#faf9f6" },
-    { media: "(prefers-color-scheme: dark)", color: "#0d0c0a" },
+    { media: "(prefers-color-scheme: light)", color: "#f7f5f0" },
+    { media: "(prefers-color-scheme: dark)", color: "#100e0c" },
   ],
   width: "device-width",
   initialScale: 1,
@@ -37,11 +37,20 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
+const THEME_SCRIPT = `(function(){try{var c=localStorage.getItem("scout:theme");var d=c==="dark"||((c==="system"||!c)&&window.matchMedia("(prefers-color-scheme: dark)").matches);if(d)document.documentElement.classList.add("dark");}catch(e){}})();`;
+
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        {/*
+          Runs before first paint so a dark-theme visitor never sees a white
+          flash. Kept inline and dependency-free for exactly that reason.
+        */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
       <body
         className={`${inter.variable} ${fraunces.variable} ${jetbrainsMono.variable} antialiased`}
       >

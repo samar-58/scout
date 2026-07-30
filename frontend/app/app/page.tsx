@@ -14,27 +14,30 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { StartupCanvas } from "@/components/canvas/startup-canvas";
 import { IdeaComposer } from "@/components/idea-composer";
 import { LivePulse } from "@/components/live-pulse";
 import { LiveResearch } from "@/components/live-research";
-import { ReportPanel } from "@/components/report-panel";
 import { ResearchActivity } from "@/components/research-activity";
+import type { RunOutcomeState } from "@/components/run-header";
 import { ScoutMark } from "@/components/scout-logo";
-import { StartupCanvas } from "@/components/canvas/startup-canvas";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useComposerDraft } from "@/hooks/use-composer-draft";
+import { useElapsed } from "@/hooks/use-elapsed";
 import { useStartupStream } from "@/hooks/use-startup-stream";
-import { initialFormState, readablePrompt, toPayload } from "@/lib/startup-form";
+import { formatElapsed } from "@/lib/run-phase";
+import { readablePrompt, toPayload } from "@/lib/startup-form";
 import { cn } from "@/lib/utils";
-import type { StartupFormState, StartupPayload } from "@/lib/types";
+import type { StartupPayload } from "@/lib/types";
 
 const STATUS_STYLES: Record<string, string> = {
   streaming: "border-border bg-muted text-foreground",
   submitted: "border-border bg-muted text-foreground",
   running: "border-border bg-muted text-foreground",
-  done: "border-success/30 bg-success/10 text-success",
-  cancelled: "border-warning/30 bg-warning/10 text-warning",
-  error: "border-destructive/30 bg-destructive/10 text-destructive",
+  done: "border-success/30 bg-success-muted text-success",
+  cancelled: "border-warning/30 bg-warning-muted text-warning",
+  error: "border-destructive/30 bg-destructive-muted text-destructive",
 };
 
 function StatusPill({
@@ -59,14 +62,14 @@ function StatusPill({
 
 export default function AppPage() {
   const router = useRouter();
-  const [form, setForm] = useState<StartupFormState>(initialFormState);
+  const { form, update, clearDraft, draftRestored, dismissRestoredNotice } =
+    useComposerDraft();
   const [hasStarted, setHasStarted] = useState(false);
   const [submittedPayload, setSubmittedPayload] = useState<StartupPayload>();
   const {
     agents,
     searches,
     sources,
-    score,
     report,
     markdown,
     isRunning,
@@ -75,27 +78,47 @@ export default function AppPage() {
     submit,
     cancelRun,
   } = useStartupStream();
+  const elapsedMs = useElapsed(isRunning);
 
-  // The structured payload only arrives with the terminal run_end event, so the
-  // canvas mounts once the run completes; until then the streaming Markdown is
-  // the only thing worth showing.
+  /*
+   * The canvas is gated on the structured report, not on the streaming
+   * Markdown. The Markdown arrives first but is no longer rendered, so
+   * switching views on it would show an empty workspace.
+   */
   const structuredReport =
     report?.status === "completed" ? report.report : undefined;
 
-  function update<K extends keyof StartupFormState>(
-    field: K,
-    value: StartupFormState[K],
-  ) {
-    setForm((current) => ({ ...current, [field]: value }));
+  const outcome: RunOutcomeState = error
+    ? "error"
+    : isRunning
+      ? "running"
+      : displayStatus === "cancelled"
+        ? "cancelled"
+        : displayStatus === "done"
+          ? "done"
+          : "running";
+
+  async function startRun(payload: StartupPayload) {
+    setSubmittedPayload(payload);
+    setHasStarted(true);
+    await submit(readablePrompt(payload), { startup: payload });
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const payload = toPayload(form);
     if (!payload.idea || isRunning) return;
-    setSubmittedPayload(payload);
-    setHasStarted(true);
-    await submit(readablePrompt(payload), { startup: payload });
+    await startRun(payload);
+  }
+
+  async function retryRun() {
+    const payload = submittedPayload ?? toPayload(form);
+    if (!payload.idea || isRunning) return;
+    await startRun(payload);
+  }
+
+  function editIdea() {
+    setHasStarted(false);
   }
 
   const [pendingAction, setPendingAction] = useState<"leave" | "stop" | null>(
@@ -123,7 +146,7 @@ export default function AppPage() {
 
   return (
     <div className="min-h-dvh">
-      <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur-md pt-safe pl-safe pr-safe">
+      <header className="sticky top-0 z-30 border-b border-border bg-background/85 pt-safe pr-safe pl-safe backdrop-blur-md">
         <div className="mx-auto flex h-14 max-w-[1580px] items-center justify-between gap-2 px-4 sm:gap-4 sm:px-6">
           <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
             <Link
@@ -147,7 +170,7 @@ export default function AppPage() {
             </Link>
             {hasStarted && form.idea && (
               <>
-                <span className="hidden text-border sm:inline">/</span>
+                <span className="hidden text-border-strong sm:inline">/</span>
                 <p className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
                   {form.idea}
                 </p>
@@ -155,6 +178,11 @@ export default function AppPage() {
             )}
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            {hasStarted && isRunning && (
+              <span className="hidden font-mono text-[11px] tabular-nums text-muted-foreground sm:inline">
+                {formatElapsed(elapsedMs)}
+              </span>
+            )}
             {hasStarted && (
               <StatusPill displayStatus={displayStatus} isRunning={isRunning} />
             )}
@@ -183,6 +211,7 @@ export default function AppPage() {
                 <span className="hidden sm:inline">New</span>
               </Button>
             )}
+            <ThemeToggle className="hidden sm:inline-flex" />
           </div>
         </div>
       </header>
@@ -194,51 +223,30 @@ export default function AppPage() {
           onSubmit={handleSubmit}
           isRunning={isRunning}
           error={error}
+          draftRestored={draftRestored}
+          onClearDraft={clearDraft}
+          onDismissRestored={dismissRestoredNotice}
         />
-      ) : !markdown ? (
+      ) : !structuredReport ? (
         <LiveResearch
           agents={agents}
           searches={searches}
           isRunning={isRunning}
+          outcome={outcome}
+          elapsedMs={elapsedMs}
+          error={error}
+          onRetry={retryRun}
+          onEditIdea={editIdea}
         />
       ) : (
-        <main className="mx-auto grid w-full max-w-[1580px] items-start gap-4 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] duration-500 animate-in fade-in sm:gap-5 sm:p-6 lg:grid-cols-[minmax(320px,380px)_minmax(0,1fr)]">
-          <ResearchActivity
-            agents={agents}
-            searches={searches}
-            isRunning={isRunning}
+        <main className="mx-auto w-full max-w-[1580px] space-y-5 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] duration-500 animate-in fade-in sm:p-6">
+          <StartupCanvas
+            report={structuredReport}
+            payload={submittedPayload}
+            markdown={markdown}
+            sources={sources}
           />
-          {structuredReport ? (
-            <Tabs defaultValue="workspace" className="min-w-0">
-              <TabsList variant="line" className="mb-1">
-                <TabsTrigger value="workspace">Workspace</TabsTrigger>
-                <TabsTrigger value="report">Full report</TabsTrigger>
-              </TabsList>
-              <TabsContent value="workspace">
-                <StartupCanvas
-                  report={structuredReport}
-                  payload={submittedPayload}
-                  score={score}
-                  sources={sources}
-                />
-              </TabsContent>
-              <TabsContent value="report">
-                <ReportPanel
-                  markdown={markdown}
-                  score={score}
-                  sources={sources}
-                  isRunning={isRunning}
-                />
-              </TabsContent>
-            </Tabs>
-          ) : (
-            <ReportPanel
-              markdown={markdown}
-              score={score}
-              sources={sources}
-              isRunning={isRunning}
-            />
-          )}
+          <ResearchActivity agents={agents} searches={searches} />
         </main>
       )}
 

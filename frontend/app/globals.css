@@ -5,107 +5,177 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Scout design tokens — warm paper + ink monochrome with a single restrained
- * burnt-amber brand accent. Editorial, high-contrast, and confidently
- * un-flashy: no generic AI blue. Serif display (Fraunces) headings carry the
- * character; the amber accent is used sparingly for eyebrows, the logo, and
- * active states. Semantic colors are reserved strictly for status + scores.
+ * Scout design tokens.
+ *
+ * Foundation: warm paper and ink with a burnt-amber brand accent — editorial,
+ * not generic AI blue. What changed: the palette used to be a flat two-surface
+ * monochrome, which read as austere. It now carries
+ *
+ *   - four layered surfaces (sunken → page → raised → floating) so panels can
+ *     sit on top of each other legibly instead of relying on borders alone,
+ *   - a six-hue analytical palette for the score dimensions, kept in the warm
+ *     earthy family so charts feel like a printed annual report,
+ *   - warm-tinted elevation instead of neutral grey shadow,
+ *   - a real dark theme, reachable via the .dark class on <html>.
+ *
+ * Semantic colours stay reserved for status. Chart colours are only for data.
  */
 :root {
-  --radius: 0.5rem;
+  --radius: 0.625rem;
 
-  /* Warm paper base */
-  --background: #faf9f6;
-  --foreground: #1c1a17;
-  --card: #ffffff;
-  --card-foreground: #1c1a17;
-  --popover: #ffffff;
-  --popover-foreground: #1c1a17;
+  /* Layered warm paper */
+  --background: #f7f5f0;
+  --surface-sunken: #efece4;
+  --foreground: #1a1815;
+  --card: #fffefb;
+  --card-foreground: #1a1815;
+  --floating: #ffffff;
+  --popover: #fffefb;
+  --popover-foreground: #1a1815;
 
-  /* Ink primary action (monochrome, premium) */
-  --primary: #1c1a17;
-  --primary-foreground: #faf9f6;
-  --secondary: #f2f0eb;
-  --secondary-foreground: #2a2723;
-  --muted: #f2f0eb;
-  --muted-foreground: #78736b;
-  --accent: #f2f0eb;
-  --accent-foreground: #1c1a17;
+  /* Ink primary action */
+  --primary: #1a1815;
+  --primary-foreground: #f7f5f0;
+  --secondary: #eeeae1;
+  --secondary-foreground: #29251f;
+  --muted: #eeeae1;
+  --muted-foreground: #726c62;
+  --accent: #eeeae1;
+  --accent-foreground: #1a1815;
 
-  /* Brand accent — burnt amber, used sparingly */
-  --brand: #b45309;
-  --brand-foreground: #faf9f6;
-  --brand-muted: #f6ecdd;
+  /* Brand accent — burnt amber */
+  --brand: #b0500a;
+  --brand-hover: #94420a;
+  --brand-foreground: #fffefb;
+  --brand-muted: #f7e9d7;
+  --brand-ring: #d98530;
 
-  /* Semantic (status + scores only) */
-  --success: #15803d;
+  /* Semantic (status only) */
+  --success: #15703c;
   --success-foreground: #f0fdf4;
-  --warning: #b45309;
+  --success-muted: #e2f2e6;
+  --warning: #a8620a;
   --warning-foreground: #fffbeb;
-  --destructive: #b42318;
+  --warning-muted: #f9ecd8;
+  --destructive: #ad2318;
   --destructive-foreground: #fef2f2;
-  --info: #1c1a17;
-  --info-foreground: #faf9f6;
+  --destructive-muted: #f8e4e1;
+  --info: #1a1815;
+  --info-foreground: #f7f5f0;
 
-  --border: #e7e3db;
-  --input: #e7e3db;
-  --ring: #b45309;
+  /* Analytical palette — one hue per scored dimension, warm and print-like */
+  --chart-1: #b0500a; /* market — amber      */
+  --chart-2: #9c3412; /* competition — rust  */
+  --chart-3: #4d6a18; /* distribution — olive*/
+  --chart-4: #0f6f68; /* execution — teal    */
+  --chart-5: #3b3899; /* timing — indigo     */
+  --chart-6: #8a1a72; /* monetization — plum */
+
+  --border: #e2ddd2;
+  --border-strong: #cfc8b9;
+  --input: #e2ddd2;
+  --ring: #b0500a;
+  --grid-line: #e2ddd2;
 
   /* Typography */
   --font-sans: var(--font-inter), "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-serif: var(--font-fraunces), "Fraunces", Georgia, serif;
   --font-mono: var(--font-mono-jbmono), "JetBrains Mono", ui-monospace, monospace;
 
-  --shadow-color: 28 26 23;
+  /* Warm elevation — shadows tinted with the ink hue, never neutral grey */
+  --shadow-color: 32 26 18;
+  --shadow-xs: 0 1px 2px rgb(var(--shadow-color) / 0.05);
+  --shadow-sm:
+    0 1px 2px rgb(var(--shadow-color) / 0.05),
+    0 2px 6px -1px rgb(var(--shadow-color) / 0.06);
+  --shadow-md:
+    0 2px 4px rgb(var(--shadow-color) / 0.05),
+    0 8px 20px -6px rgb(var(--shadow-color) / 0.1);
+  --shadow-lg:
+    0 4px 8px rgb(var(--shadow-color) / 0.05),
+    0 18px 40px -12px rgb(var(--shadow-color) / 0.14);
 }
 
 .dark {
-  --background: #0d0c0a;
-  --foreground: #f4f1ea;
-  --card: #17150f;
-  --card-foreground: #f4f1ea;
-  --popover: #17150f;
-  --popover-foreground: #f4f1ea;
+  --background: #100e0c;
+  --surface-sunken: #0a0908;
+  --foreground: #f2eee6;
+  --card: #1a1713;
+  --card-foreground: #f2eee6;
+  --floating: #221e19;
+  --popover: #1a1713;
+  --popover-foreground: #f2eee6;
 
-  --primary: #f4f1ea;
-  --primary-foreground: #17150f;
-  --secondary: #201d16;
-  --secondary-foreground: #e7e3db;
-  --muted: #201d16;
-  --muted-foreground: #a29a8c;
-  --accent: #201d16;
-  --accent-foreground: #f4f1ea;
+  --primary: #f2eee6;
+  --primary-foreground: #1a1713;
+  --secondary: #221e19;
+  --secondary-foreground: #e4dfd5;
+  --muted: #231f1a;
+  --muted-foreground: #a29a8b;
+  --accent: #231f1a;
+  --accent-foreground: #f2eee6;
 
   --brand: #e08c3a;
-  --brand-foreground: #17150f;
-  --brand-muted: #2a2013;
+  --brand-hover: #eda252;
+  --brand-foreground: #1a1713;
+  --brand-muted: #33230f;
+  --brand-ring: #e08c3a;
 
-  --success: #4ade80;
-  --success-foreground: #052e16;
-  --warning: #f0a94a;
-  --warning-foreground: #271a04;
-  --destructive: #f87171;
-  --destructive-foreground: #2a0a0a;
-  --info: #f4f1ea;
-  --info-foreground: #17150f;
+  --success: #4fbe78;
+  --success-foreground: #06240f;
+  --success-muted: #122b1a;
+  --warning: #e2a54e;
+  --warning-foreground: #251803;
+  --warning-muted: #2f2210;
+  --destructive: #ef6f66;
+  --destructive-foreground: #2a0a08;
+  --destructive-muted: #331613;
+  --info: #f2eee6;
+  --info-foreground: #1a1713;
 
-  --border: #2c2820;
-  --input: #2c2820;
+  /* Lifted for contrast against the dark ground */
+  --chart-1: #e59547;
+  --chart-2: #e8794f;
+  --chart-3: #a3c258;
+  --chart-4: #3fb8ab;
+  --chart-5: #8b87e8;
+  --chart-6: #d167b4;
+
+  --border: #2e2823;
+  --border-strong: #453d34;
+  --input: #2e2823;
   --ring: #e08c3a;
+  --grid-line: #2a241f;
+
+  --shadow-color: 0 0 0;
+  --shadow-xs: 0 1px 2px rgb(var(--shadow-color) / 0.3);
+  --shadow-sm:
+    0 1px 2px rgb(var(--shadow-color) / 0.3),
+    0 2px 6px -1px rgb(var(--shadow-color) / 0.35);
+  --shadow-md:
+    0 2px 4px rgb(var(--shadow-color) / 0.3),
+    0 8px 20px -6px rgb(var(--shadow-color) / 0.45);
+  --shadow-lg:
+    0 4px 8px rgb(var(--shadow-color) / 0.3),
+    0 18px 40px -12px rgb(var(--shadow-color) / 0.6);
 }
 
 @theme inline {
   --color-background: var(--background);
+  --color-surface-sunken: var(--surface-sunken);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
+  --color-floating: var(--floating);
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
   --color-brand-foreground: var(--brand-foreground);
   --color-brand-muted: var(--brand-muted);
+  --color-brand-ring: var(--brand-ring);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
@@ -114,15 +184,26 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
+  --color-success-muted: var(--success-muted);
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
+  --color-warning-muted: var(--warning-muted);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-muted: var(--destructive-muted);
   --color-info: var(--info);
   --color-info-foreground: var(--info-foreground);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
   --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-grid-line: var(--grid-line);
 
   --font-sans: var(--font-sans);
   --font-serif: var(--font-serif);
@@ -132,6 +213,12 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 10px);
+
+  --shadow-xs: var(--shadow-xs);
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
 }
 
 @layer base {
@@ -146,6 +233,25 @@
     -webkit-tap-highlight-color: transparent;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
+  }
+  /* Only animate colour when the theme flips, and never for motion-sensitive users. */
+  html.theme-transition * {
+    transition:
+      background-color 220ms ease,
+      border-color 220ms ease,
+      color 220ms ease;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html.theme-transition * {
+      transition: none;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
 
@@ -177,5 +283,49 @@
   .scroll-touch {
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
+  }
+
+  /* Faint engineering grid, used behind hero surfaces. */
+  .bg-grid {
+    background-image:
+      linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+
+  /* Hairline top highlight — makes raised cards read as physical. */
+  .surface-raised {
+    background-color: var(--card);
+    box-shadow:
+      inset 0 1px 0 0 rgb(255 255 255 / 0.6),
+      var(--shadow-sm);
+  }
+  .dark .surface-raised {
+    box-shadow:
+      inset 0 1px 0 0 rgb(255 255 255 / 0.04),
+      var(--shadow-sm);
+  }
+
+  /* Staggered entrance for canvas sections. */
+  .stagger > * {
+    animation: canvas-rise 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .stagger > *:nth-child(1) { animation-delay: 0ms; }
+  .stagger > *:nth-child(2) { animation-delay: 45ms; }
+  .stagger > *:nth-child(3) { animation-delay: 90ms; }
+  .stagger > *:nth-child(4) { animation-delay: 135ms; }
+  .stagger > *:nth-child(5) { animation-delay: 180ms; }
+  .stagger > *:nth-child(6) { animation-delay: 225ms; }
+  .stagger > *:nth-child(n + 7) { animation-delay: 270ms; }
+
+  @keyframes canvas-rise {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
   }
 }
