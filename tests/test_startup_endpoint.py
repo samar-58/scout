@@ -10,8 +10,8 @@ os.environ.setdefault("GROQ_API_KEY", "test-groq-key")
 from fastapi.testclient import TestClient
 
 from main import app
-from llm import _groq_model
-from startup_graph import (
+from scout.research.llm import _groq_model
+from scout.research.startup_graph import (
     AgentInsight,
     CompetitorAgentOutput,
     CompetitorSnapshot,
@@ -457,7 +457,7 @@ class StartupStressTestEndpointTests(unittest.TestCase):
         )
 
     def test_qwen_model_disables_reasoning_for_structured_specialists(self):
-        with patch("llm.ChatGroq") as chat_groq:
+        with patch("scout.research.llm.ChatGroq") as chat_groq:
             _groq_model("qwen/qwen3.6-27b", max_tokens=1800)
 
         options = chat_groq.call_args.kwargs
@@ -495,7 +495,7 @@ class StartupStressTestEndpointTests(unittest.TestCase):
 
     def test_llm_rate_limit_is_retried_with_provider_delay(self):
         runnable = FlakyRunnable()
-        with patch("startup_graph.time.sleep") as sleep:
+        with patch("scout.research.startup_graph.time.sleep") as sleep:
             result = _invoke_with_retry(runnable, [])
         self.assertEqual(result, {"ok": True})
         self.assertEqual(runnable.calls, 2)
@@ -514,8 +514,8 @@ class StartupStressTestEndpointTests(unittest.TestCase):
         }
 
         with (
-            patch("startup_graph.specialist_llm", model),
-            patch("startup_graph._stream_writer", return_value=events.append),
+            patch("scout.research.startup_graph.specialist_llm", model),
+            patch("scout.research.startup_graph._stream_writer", return_value=events.append),
         ):
             output = _run_structured_agent(
                 state,
@@ -696,7 +696,7 @@ class StartupStressTestEndpointTests(unittest.TestCase):
             ],
         )
 
-        with patch("main.run_startup_stress_test", return_value=report):
+        with patch("scout.api.legacy.run_startup_stress_test", return_value=report):
             response = self.client.post(
                 "/startup/stress-test",
                 json={"idea": "AI copilot for small accounting firms"},
@@ -724,8 +724,8 @@ class StartupStressTestEndpointTests(unittest.TestCase):
     def test_v1_tavily_error_payload_is_rejected(self):
         fake_search = FakeErrorSearch()
         with (
-            patch("startup_graph._get_tavily_search", return_value=fake_search),
-            patch("startup_graph.llm", FakeLLM()),
+            patch("scout.research.startup_graph._get_tavily_search", return_value=fake_search),
+            patch("scout.research.startup_graph.llm", FakeLLM()),
         ):
             with self.assertRaisesRegex(RuntimeError, "Tavily search failed"):
                 run_startup_stress_test(
@@ -736,8 +736,8 @@ class StartupStressTestEndpointTests(unittest.TestCase):
     def test_v1_tavily_result_without_url_is_rejected(self):
         fake_search = FakeMissingUrlSearch()
         with (
-            patch("startup_graph._get_tavily_search", return_value=fake_search),
-            patch("startup_graph.llm", FakeLLM()),
+            patch("scout.research.startup_graph._get_tavily_search", return_value=fake_search),
+            patch("scout.research.startup_graph.llm", FakeLLM()),
         ):
             with self.assertRaisesRegex(RuntimeError, "no usable source URLs"):
                 run_startup_stress_test(
@@ -758,7 +758,7 @@ class StartupStressTestEndpointTests(unittest.TestCase):
     def test_v2_accepts_idea_only_and_returns_rich_report(self):
         report = build_v2_report()
 
-        with patch("main.run_startup_stress_test_v2", return_value=report):
+        with patch("scout.api.legacy.run_startup_stress_test_v2", return_value=report):
             response = self.client.post(
                 "/startup/stress-test/v2",
                 json={"idea": "AI copilot for small accounting firms"},
@@ -774,7 +774,7 @@ class StartupStressTestEndpointTests(unittest.TestCase):
     def test_v2_accepts_richer_founder_context(self):
         report = build_v2_report()
 
-        with patch("main.run_startup_stress_test_v2", return_value=report):
+        with patch("scout.api.legacy.run_startup_stress_test_v2", return_value=report):
             response = self.client.post(
                 "/startup/stress-test/v2",
                 json={
@@ -851,7 +851,7 @@ class StartupStressTestEndpointTests(unittest.TestCase):
         ]
 
         with patch(
-            "main.stream_startup_stress_test_v2",
+            "scout.api.legacy.stream_startup_stress_test_v2",
             return_value=async_events(events),
         ):
             response = self.client.post(
@@ -950,9 +950,9 @@ class StartupStressTestEndpointTests(unittest.TestCase):
         fake_search = FakeSearch()
 
         with (
-            patch("startup_graph._get_tavily_search", return_value=fake_search),
-            patch("startup_graph.llm", FakeLLM()),
-            patch("startup_graph.specialist_llm", FakeLLM()),
+            patch("scout.research.startup_graph._get_tavily_search", return_value=fake_search),
+            patch("scout.research.startup_graph.llm", FakeLLM()),
+            patch("scout.research.startup_graph.specialist_llm", FakeLLM()),
         ):
             report = run_startup_stress_test(
                 StartupStressTestRequest(
@@ -972,9 +972,9 @@ class StartupStressTestEndpointTests(unittest.TestCase):
         fake_search = FakeDuplicateSearch()
 
         with (
-            patch("startup_graph._get_tavily_search", return_value=fake_search),
-            patch("startup_graph.llm", FakeLLM()),
-            patch("startup_graph.specialist_llm", FakeLLM()),
+            patch("scout.research.startup_graph._get_tavily_search", return_value=fake_search),
+            patch("scout.research.startup_graph.llm", FakeLLM()),
+            patch("scout.research.startup_graph.specialist_llm", FakeLLM()),
         ):
             report = run_startup_stress_test_v2(
                 StartupStressTestV2Request(
@@ -1003,9 +1003,9 @@ class StartupStressTestEndpointTests(unittest.TestCase):
         fake_search = FakeDuplicateSearch()
 
         with (
-            patch("startup_graph._get_tavily_search", return_value=fake_search),
-            patch("startup_graph.llm", FakeLLM()),
-            patch("startup_graph.specialist_llm", FakeLLM()),
+            patch("scout.research.startup_graph._get_tavily_search", return_value=fake_search),
+            patch("scout.research.startup_graph.llm", FakeLLM()),
+            patch("scout.research.startup_graph.specialist_llm", FakeLLM()),
         ):
             events = asyncio.run(
                 collect_stream(

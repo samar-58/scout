@@ -1,3 +1,5 @@
+import { UserButton } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import {
   ArrowRight,
   CircleHelp,
@@ -113,10 +115,12 @@ const LIMITS = [
   "Talk to your customers for you. Research narrows the question; only people answer it.",
   "Pretend to be certain. Every recommendation carries a confidence and the evidence behind it.",
   "Invent a number. If a claim has no source, it does not reach your canvas.",
-  "Remember your run yet. Nothing is stored — refreshing loses the report.",
+  "Change your thesis without confirmation. Scout can recommend a move; the founder owns the decision.",
 ];
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const { userId } = await auth();
+
   return (
     <div className="min-h-screen">
       <header className="sticky top-4 z-30 px-4">
@@ -137,11 +141,20 @@ export default function LandingPage() {
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <ThemeToggle className="hidden sm:inline-flex" />
-            <Button asChild size="sm" className="rounded-full">
-              <Link href="/app">
-                Open Scout <ArrowRight size={14} />
-              </Link>
-            </Button>
+            {userId ? (
+              <>
+                <Button asChild size="sm" className="rounded-full">
+                  <Link href="/app">
+                    Open Scout <ArrowRight size={14} />
+                  </Link>
+                </Button>
+                <UserButton appearance={{ elements: { avatarBox: "h-8 w-8" } }} />
+              </>
+            ) : (
+              <Button asChild size="sm" variant="outline" className="rounded-full">
+                <Link href="/sign-in">Sign in</Link>
+              </Button>
+            )}
           </div>
         </nav>
       </header>
@@ -198,7 +211,7 @@ export default function LandingPage() {
                 </Button>
               </div>
               <p className="mt-6 font-mono text-xs tracking-tight text-muted-foreground">
-                No signup · Every claim cited · Free to run
+                Free account · Every claim cited · Projects saved
               </p>
             </div>
 

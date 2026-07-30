@@ -19,10 +19,12 @@ The seven specialists are Market Analyst, Competitor Analyst, Customer Analyst, 
 - **Research:** Tavily advanced search, normalized and URL-deduplicated evidence
 - **Models:** Groq via `langchain-groq`, with configurable specialist and synthesis models
 - **Transport:** Server-Sent Events using the AI SDK UI Message Stream Protocol
+- **Authentication:** Clerk for Next.js sessions and backend bearer-token verification
+- **Persistence:** PostgreSQL through SQLAlchemy and Alembic
 
 ## Local development
 
-Requirements: Python 3.14+, `uv`, Bun, and API keys for Groq and Tavily.
+Requirements: Python 3.14+, `uv`, Bun, PostgreSQL, a Clerk application, and API keys for Groq and Tavily.
 
 ### 1. Configure the backend
 
@@ -32,11 +34,14 @@ Create the root environment file from the safe template:
 cp .env.example .env
 ```
 
-Set the required keys and the browser origins allowed by CORS:
+Set the required service keys, database URL, Clerk backend key, and allowed browser origins:
 
 ```dotenv
 GROQ_API_KEY=your-groq-key
 TAVILY_API_KEY=your-tavily-key
+DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/scout
+CLERK_SECRET_KEY=sk_test_your-clerk-secret-key
+CLERK_AUTHORIZED_PARTIES=http://localhost:3001,http://127.0.0.1:3001
 FRONTEND_ORIGINS=http://localhost:3001,http://127.0.0.1:3001
 ```
 
@@ -61,10 +66,16 @@ Next.js loads browser-visible environment variables from the `frontend/` directo
 cp frontend/.env.example frontend/.env.local
 ```
 
-Set the backend URL that the browser should call:
+Set the backend URL and Clerk keys used by Next.js:
 
 ```dotenv
 NEXT_PUBLIC_API_BASE_URL=http://localhost:3000
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_your-clerk-publishable-key
+CLERK_SECRET_KEY=sk_test_your-clerk-secret-key
+NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
+NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/app
+NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/app
 ```
 
 `NEXT_PUBLIC_API_BASE_URL` is the frontend-to-backend URL. `FRONTEND_ORIGINS` is the backend-to-frontend CORS allowlist; they should describe the two sides of the same deployment.
@@ -75,6 +86,7 @@ Start the backend on port 3000:
 
 ```bash
 uv sync
+uv run alembic upgrade head
 uv run uvicorn main:app --reload --host 0.0.0.0 --port 3000
 ```
 
@@ -86,7 +98,7 @@ bun install --frozen-lockfile
 bun run dev
 ```
 
-Open <http://localhost:3001>. Restart Next.js after changing `NEXT_PUBLIC_API_BASE_URL`, because public Next.js environment values are embedded at build/dev-server startup.
+Open <http://localhost:3001>. Restart Next.js after changing `NEXT_PUBLIC_API_BASE_URL` or `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, because public Next.js environment values are embedded at build/dev-server startup.
 
 ## Frontend experience
 
@@ -95,7 +107,7 @@ Open <http://localhost:3001>. Restart Next.js after changing `NEXT_PUBLIC_API_BA
 - **Live research:** shows all seven specialists immediately as queued placeholders. They transition through running, completed, or failed states as lifecycle events arrive. Search cards show purpose, query, result count, timing, errors, and source links.
 - **Progress feedback:** the main active-run indicator uses a calm live pulse; status counters show agent and search progress without blocking the page.
 - **Report view:** renders streamed Markdown with score breakdown, navigable headings, verified source links, Copy, and Download Markdown actions. The layout is fully mobile responsive: the score breakdown and rationale reflow to a single column on small screens, headings scale down, wide tables scroll horizontally within a bordered container, and the research-activity panel collapses so the report stays front and centre.
-- **Run controls:** Back and Stop open a styled warning dialog because runs are not persisted. The dialog explains that leaving or stopping loses the current progress/report; confirming Back returns home and confirming Stop aborts the stream.
+- **Run controls:** Back and Stop warn before interrupting active research. Projects, ordered events, and completed report versions are persisted; cancelling a run preserves its history but does not create a final report.
 
 ## Backend API
 
@@ -107,9 +119,22 @@ Open <http://localhost:3001>. Restart Next.js after changing `NEXT_PUBLIC_API_BA
 - `POST /startup/stress-test` — blocking v1 startup report.
 - `POST /startup/stress-test/v2` — blocking structured startup report.
 
-### Streaming route
+### Authenticated persistence routes
 
-`POST /startup/stress-test/v2/stream` is the route used by the Next.js client. It accepts a UI-message envelope with a non-empty `messages` array and a nested `startup` payload:
+All `/api/*` routes require a Clerk session token in `Authorization: Bearer <token>`. Resources are always filtered by the token's `sub` claim.
+
+- `GET /api/me` — current authenticated identity.
+- `POST/GET /api/projects` — create or list owned projects.
+- `GET/PATCH/DELETE /api/projects/{project_id}` — read, update, or archive an owned project.
+- `POST/GET /api/projects/{project_id}/runs` — create or list research runs.
+- `POST /api/runs/stream` — create and execute a persisted run using `project_id`, `messages`, and `startup` in the request body.
+- `GET /api/runs/{run_id}` and `POST /api/runs/{run_id}/cancel` — inspect or cancel an owned run.
+- `GET /api/runs/{run_id}/events?after=N` — replay ordered persisted domain events.
+- `GET /api/projects/{project_id}/reports` — list immutable report versions.
+
+### Legacy streaming route
+
+`POST /startup/stress-test/v2/stream` remains available for compatibility. The authenticated Next.js client uses `POST /api/runs/stream`, which wraps the same graph while persisting the project, run, events, and completed artifact. Both accept a UI-message envelope with a non-empty `messages` array and a nested `startup` payload:
 
 ```json
 {
@@ -141,7 +166,7 @@ Open <http://localhost:3001>. Restart Next.js after changing `NEXT_PUBLIC_API_BA
 }
 ```
 
-Only `startup.idea` is required; the remaining startup fields are optional and improve query and specialist context. The response is `text/event-stream` with `x-vercel-ai-ui-message-stream: v1` and ends with `data: [DONE]`.
+Only `startup.idea` is required; the remaining startup fields are optional and improve query and specialist context. The authenticated `/api/runs/stream` variant additionally requires an owned `project_id` at the top level. The response is `text/event-stream` with `x-vercel-ai-ui-message-stream: v1` and ends with `data: [DONE]`.
 
 The stream includes observable UI events such as:
 
@@ -152,6 +177,8 @@ The stream includes observable UI events such as:
 - `data-score`, `source-url`, `text-*`, `data-report`, and `error` parts.
 
 ## Architecture
+
+Backend code lives under the `scout` package: `api/` contains authenticated and compatibility routers, `core/` owns auth/configuration, `persistence/` owns SQLAlchemy data access, `research/` contains LangGraph orchestration, `streaming/` adapts domain events to AI SDK SSE, and `legacy/` isolates the tutorial chat workflow. Root `main.py` is intentionally only the stable `uvicorn main:app` entry point.
 
 The v2 graph follows a bounded research pipeline:
 
@@ -187,7 +214,7 @@ uv run python scripts/stream_startup_test.py \
 Run the backend tests:
 
 ```bash
-uv run python -m unittest tests/test_startup_endpoint.py -v
+uv run python -m unittest discover -s tests -v
 ```
 
 Run the frontend checks from `frontend/`:
@@ -197,11 +224,13 @@ bun run typecheck
 bun run build
 ```
 
-The test suite covers request validation, blocking and streaming responses, SSE ordering, protocol errors, CORS behavior, search failure handling, source normalization, specialist fan-out, synthesis, score ownership, and report generation.
+The test suite covers request validation, blocking and streaming responses, SSE ordering, protocol errors, CORS behavior, Clerk identity extraction, missing-auth rejection, ownership isolation, event/report persistence, artifact versioning, source normalization, specialist fan-out, synthesis, score ownership, and report generation.
 
 ## Current limitations
 
 - The provider does not expose token-by-token model streaming. The completed structured report is generated after synthesis and its Markdown is emitted in 500-character SSE chunks.
 - In-flight synchronous provider calls may not stop immediately after the browser aborts the stream.
-- Run state is in memory only. Refreshing, leaving, stopping, or starting a new run loses the current progress/report.
-- Authentication, persistent storage, distributed rate limiting, and production telemetry are outside this application.
+- Research execution still runs inside the API process; a backend restart interrupts active work even though prior events remain persisted.
+- The frontend does not yet include a project-history dashboard or run reconnection UI; the authenticated APIs expose the stored data.
+- Canvas assumption and experiment status changes are still browser-local and are not first-class persisted records yet.
+- Distributed rate limiting and production telemetry are not implemented.

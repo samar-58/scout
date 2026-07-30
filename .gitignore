@@ -21,3 +21,6 @@ frontend/*.tsbuildinfo
 
 # Private product planning
 SCOUT_PRODUCT_DIRECTION.md
+
+# Local CLI transcripts
+*-session.jsonl

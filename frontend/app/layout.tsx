@@ -1,3 +1,4 @@
+import { ClerkProvider } from "@clerk/nextjs";
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
@@ -43,19 +44,21 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <head>
-        {/*
-          Runs before first paint so a dark-theme visitor never sees a white
-          flash. Kept inline and dependency-free for exactly that reason.
-        */}
-        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
-      </head>
-      <body
-        className={`${inter.variable} ${fraunces.variable} ${jetbrainsMono.variable} antialiased`}
-      >
-        {children}
-      </body>
-    </html>
+    <ClerkProvider>
+      <html lang="en" suppressHydrationWarning>
+        <head>
+          {/*
+            Runs before first paint so a dark-theme visitor never sees a white
+            flash. Kept inline and dependency-free for exactly that reason.
+          */}
+          <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+        </head>
+        <body
+          className={`${inter.variable} ${fraunces.variable} ${jetbrainsMono.variable} antialiased`}
+        >
+          {children}
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }

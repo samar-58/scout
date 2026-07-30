@@ -1,31 +1,32 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
+import { useAuth } from "@clerk/nextjs";
 import { DefaultChatTransport } from "ai";
 import { useMemo, useState } from "react";
 import { withQueuedAgents } from "@/lib/agent-meta";
+import { API_BASE_URL, createProject } from "@/lib/scout-api";
 import type {
   AgentEvent,
   ReportEvent,
   ScoreEvent,
   SearchEvent,
+  StartupPayload,
 } from "@/lib/types";
-
-const API_BASE_URL = (
-  process.env.NEXT_PUBLIC_API_BASE_URL?.trim() || "http://localhost:3000"
-).replace(/\/$/, "");
 
 export type RunOutcome = "idle" | "running" | "done" | "cancelled" | "error";
 
 export function useStartupStream() {
+  const { getToken } = useAuth();
   const [localError, setLocalError] = useState<string>();
   const [assistantBaseline, setAssistantBaseline] = useState(0);
   const [runOutcome, setRunOutcome] = useState<RunOutcome>("idle");
+  const [projectId, setProjectId] = useState<string>();
 
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
-        api: `${API_BASE_URL}/startup/stress-test/v2/stream`,
+        api: `${API_BASE_URL}/api/runs/stream`,
       }),
     [],
   );
@@ -101,7 +102,31 @@ export function useStartupStream() {
     setRunOutcome("running");
     setLocalError(undefined);
     clearError();
-    await sendMessage({ text: message }, { body });
+
+    try {
+      const token = await getToken();
+      if (!token) throw new Error("Your session has expired. Please sign in again.");
+
+      const startup = body.startup as StartupPayload | undefined;
+      if (!startup?.idea) throw new Error("A startup idea is required.");
+
+      const project = await createProject(token, startup);
+      setProjectId(project.id);
+      await sendMessage(
+        { text: message },
+        {
+          body: { ...body, project_id: project.id },
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+    } catch (submissionError) {
+      const message =
+        submissionError instanceof Error
+          ? submissionError.message
+          : "Could not start the research run.";
+      setLocalError(message);
+      setRunOutcome("error");
+    }
   }
 
   function cancelRun() {
@@ -116,6 +141,7 @@ export function useStartupStream() {
     score,
     report,
     markdown,
+    projectId,
     isRunning,
     displayStatus,
     error: localError || error?.message,

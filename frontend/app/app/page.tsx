@@ -1,5 +1,6 @@
 "use client";
 
+import { UserButton } from "@clerk/nextjs";
 import { ArrowLeft, Plus, Square } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -212,6 +213,9 @@ export default function AppPage() {
               </Button>
             )}
             <ThemeToggle className="hidden sm:inline-flex" />
+            <UserButton
+              appearance={{ elements: { avatarBox: "h-8 w-8" } }}
+            />
           </div>
         </div>
       </header>
@@ -264,8 +268,9 @@ export default function AppPage() {
                 : "Leave this research run?"}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Nothing is stored. If you {pendingAction === "stop" ? "stop" : "leave"}{" "}
-              now, this progress and report will be lost for good.
+              {pendingAction === "stop"
+                ? "Scout will cancel this run. Events collected so far remain in its project history, but no final report will be created."
+                : "This project is saved. Leaving while research is active may cancel the current run; completed reports remain available through the API."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

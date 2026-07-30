@@ -2,7 +2,6 @@ import os
 
 from dotenv import load_dotenv
 from langchain_groq import ChatGroq
-from tools import (multiply, weather)
 
 load_dotenv()
 
@@ -37,9 +36,4 @@ specialist_llm = _groq_model(
 llm = _groq_model(
     os.getenv("GROQ_SYNTHESIS_MODEL", "openai/gpt-oss-120b"),
     max_tokens=int(os.getenv("GROQ_SYNTHESIS_MAX_TOKENS", "1800")),
-)
-
-
-llm_with_tools = llm.bind_tools(
-    [multiply, weather]
 )

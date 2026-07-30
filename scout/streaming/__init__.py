@@ -1,0 +1,1 @@
+"""Public streaming protocol adapters."""
