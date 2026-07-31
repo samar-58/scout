@@ -1,7 +1,9 @@
 "use client";
 
 import { Check, LoaderCircle, X } from "lucide-react";
-import type { SearchEvent, SearchResult } from "@/lib/types";
+import { secondsSince } from "@/hooks/use-tick";
+import type { SearchActivity } from "@/lib/run-events";
+import type { SearchResult } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 function hostnameOf(url: string) {
@@ -15,12 +17,12 @@ function hostnameOf(url: string) {
 /**
  * The search log.
  *
- * Each search is a line: what it was for, the query it ran, how many results it
- * returned, and the domains behind them. Sources are text links rather than
- * favicon pills — eight searches × four results is 32 chips, which was the
- * single busiest surface in the app.
+ * Each search is a line: what it was for, the query, how long it has been
+ * running or how many results it returned, and the domains behind them. A search
+ * in flight counts up locally, so eight searches resolving over a minute read as
+ * work happening rather than a list that occasionally mutates.
  */
-export function SearchLog({ searches }: { searches: SearchEvent[] }) {
+export function SearchLog({ searches }: { searches: SearchActivity[] }) {
   if (searches.length === 0) {
     return (
       <p className="text-[13px] text-muted-foreground">
@@ -31,33 +33,58 @@ export function SearchLog({ searches }: { searches: SearchEvent[] }) {
 
   return (
     <ol className="divide-y divide-border border-y border-border">
-      {searches.map((item) => (
-        <li key={item.index} className="py-3">
-          <div className="flex items-baseline gap-2.5">
-            <State status={item.status} />
-            <p className="min-w-0 flex-1 text-[13px] font-medium">
-              {item.purpose || item.query}
-            </p>
-            <span className="shrink-0 text-[11px] tabular-nums text-subtle-foreground">
-              {item.status === "running"
-                ? "searching"
-                : `${item.result_count ?? (item.top_results ?? []).length} results`}
-            </span>
-          </div>
+      {searches.map((item) => {
+        const running = item.status === "running";
+        const live = running ? secondsSince(item.since) : undefined;
+        const resultCount = item.result_count ?? (item.top_results ?? []).length;
 
-          {item.query && (
-            <p className="mt-1 truncate pl-5 font-mono text-[11px] text-muted-foreground">
-              {item.query}
-            </p>
-          )}
+        return (
+          <li
+            key={item.index}
+            className={cn(
+              "row-enter -mx-2 px-2 py-3",
+              running && "row-working rounded-md",
+            )}
+          >
+            <div className="flex items-baseline gap-2.5">
+              <State status={item.status} />
+              <p className="min-w-0 flex-1 text-[13px] font-medium">
+                {item.purpose || item.query}
+              </p>
+              <span className="shrink-0 text-[11px] tabular-nums">
+                {running ? (
+                  <span className="text-muted-foreground">
+                    {live !== undefined ? `${live.toFixed(1)}s` : "searching"}
+                  </span>
+                ) : (
+                  <span className="text-subtle-foreground">
+                    {item.elapsed_ms !== undefined
+                      ? `${(item.elapsed_ms / 1000).toFixed(1)}s · ${resultCount}`
+                      : `${resultCount} results`}
+                  </span>
+                )}
+              </span>
+            </div>
 
-          {item.error && (
-            <p className="mt-1 pl-5 text-[12px] text-destructive">{item.error}</p>
-          )}
+            {item.query && (
+              <p
+                className={cn(
+                  "mt-1 truncate pl-5 font-mono text-[11px] text-muted-foreground",
+                  running && "dots",
+                )}
+              >
+                {item.query}
+              </p>
+            )}
 
-          <Sources results={item.top_results ?? []} />
-        </li>
-      ))}
+            {item.error && (
+              <p className="mt-1 pl-5 text-[12px] text-destructive">{item.error}</p>
+            )}
+
+            <Sources results={item.top_results ?? []} />
+          </li>
+        );
+      })}
     </ol>
   );
 }
@@ -69,7 +96,7 @@ function Sources({ results }: { results: SearchResult[] }) {
   return (
     <ul className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 pl-5">
       {usable.map((result, index) => (
-        <li key={result.url ?? index} className="min-w-0">
+        <li key={result.url ?? index} className="row-enter min-w-0">
           <a
             href={result.url}
             target="_blank"
@@ -85,7 +112,7 @@ function Sources({ results }: { results: SearchResult[] }) {
   );
 }
 
-function State({ status }: { status: SearchEvent["status"] }) {
+function State({ status }: { status: SearchActivity["status"] }) {
   const base = "w-3.5 shrink-0";
   if (status === "running") {
     return <LoaderCircle size={13} className={cn(base, "spin text-brand")} />;

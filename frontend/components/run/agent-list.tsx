@@ -2,18 +2,19 @@
 
 import { Check, X } from "lucide-react";
 import { LivePulse } from "@/components/live-pulse";
+import { secondsSince } from "@/hooks/use-tick";
 import { agentMeta } from "@/lib/agent-meta";
-import type { AgentEvent } from "@/lib/types";
+import type { AgentActivity } from "@/lib/run-events";
 import { cn } from "@/lib/utils";
 
 /**
- * Specialists as a list, not a timeline of avatars.
+ * Specialists as a list.
  *
- * Seven rows, each a name, a state, and its findings once they arrive. The
- * connector line, coloured icon chips and pulsing rings the old timeline used
- * carried no information the state marker didn't already carry.
+ * A running specialist shows a live counter and a breathing row, so the view
+ * moves even between event batches; a finished one shows its final duration and
+ * findings. Colour is limited to the state marker.
  */
-export function AgentList({ agents }: { agents: AgentEvent[] }) {
+export function AgentList({ agents }: { agents: AgentActivity[] }) {
   if (agents.length === 0) {
     return (
       <p className="text-[13px] text-muted-foreground">
@@ -28,9 +29,18 @@ export function AgentList({ agents }: { agents: AgentEvent[] }) {
         const meta = agentMeta(agent.agent);
         const findings = (agent.findings ?? []).slice(0, 3);
         const queued = agent.status === "queued";
+        const running = agent.status === "running";
+        const live = running ? secondsSince(agent.since) : undefined;
 
         return (
-          <li key={agent.agent} className="py-3">
+          <li
+            key={agent.agent}
+            className={cn(
+              "-mx-2 px-2 py-3",
+              running && "row-working rounded-md",
+              !queued && "row-enter",
+            )}
+          >
             <div className="flex items-baseline gap-2.5">
               <State status={agent.status} />
               <span
@@ -41,15 +51,24 @@ export function AgentList({ agents }: { agents: AgentEvent[] }) {
               >
                 {agent.display_name || meta.label}
               </span>
-              {agent.elapsed_ms !== undefined && (
+              {agent.elapsed_ms !== undefined ? (
                 <time className="shrink-0 text-[11px] tabular-nums text-subtle-foreground">
                   {(agent.elapsed_ms / 1000).toFixed(1)}s
                 </time>
-              )}
+              ) : live !== undefined ? (
+                <time className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+                  {live.toFixed(1)}s
+                </time>
+              ) : null}
             </div>
 
             {!queued && agent.message && (
-              <p className="mt-1 pl-5 text-[12.5px] leading-snug text-muted-foreground">
+              <p
+                className={cn(
+                  "mt-1 pl-5 text-[12.5px] leading-snug text-muted-foreground",
+                  running && "dots",
+                )}
+              >
                 {agent.message}
               </p>
             )}
@@ -59,7 +78,7 @@ export function AgentList({ agents }: { agents: AgentEvent[] }) {
                 {findings.map((finding, index) => (
                   <li
                     key={index}
-                    className="text-[12.5px] leading-relaxed text-foreground/75"
+                    className="row-enter text-[12.5px] leading-relaxed text-foreground/75"
                   >
                     {finding}
                   </li>
@@ -73,7 +92,7 @@ export function AgentList({ agents }: { agents: AgentEvent[] }) {
   );
 }
 
-function State({ status }: { status: AgentEvent["status"] }) {
+function State({ status }: { status: AgentActivity["status"] }) {
   if (status === "running") {
     return (
       <span className="grid w-3.5 shrink-0 place-items-center">
@@ -102,10 +121,7 @@ function State({ status }: { status: AgentEvent["status"] }) {
     );
   }
   return (
-    <span
-      className="grid w-3.5 shrink-0 place-items-center"
-      aria-label="queued"
-    >
+    <span className="grid w-3.5 shrink-0 place-items-center" aria-label="queued">
       <span className="size-1.5 rounded-full bg-border-strong" />
     </span>
   );

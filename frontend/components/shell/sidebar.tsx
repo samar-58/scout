@@ -218,9 +218,11 @@ export function Sidebar({
           <UserButton
             appearance={{
               elements: {
-                rootBox: "shrink-0",
-                userButtonTrigger: "rounded-md",
-                avatarBox: "h-7 w-7",
+                rootBox: "min-w-0! shrink!",
+                // Long names must truncate rather than push the theme control
+                // off the rail.
+                userButtonOuterIdentifier: "max-w-[8.5rem]! truncate!",
+                avatarBox: "h-6! w-6!",
               },
             }}
             showName={!collapsed}

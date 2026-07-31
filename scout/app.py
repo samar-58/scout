@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import inngest.fast_api
 
 from scout.core.config import get_settings
+from scout.api.extraction import router as extraction_router
 from scout.api.legacy import router as legacy_router
 from scout.api.persisted import router as persisted_router
 from scout.workflows.research import INNGEST_FUNCTIONS, inngest_client
@@ -25,6 +26,7 @@ def create_app() -> FastAPI:
         expose_headers=["x-scout-run-id", "x-vercel-ai-ui-message-stream"],
     )
     application.include_router(legacy_router)
+    application.include_router(extraction_router)
     application.include_router(persisted_router)
     inngest.fast_api.serve(
         application,

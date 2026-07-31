@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { initialFormState } from "@/lib/startup-form";
-import type { StartupFormState } from "@/lib/types";
+import { initialFormState, mergeExtractedForm } from "@/lib/startup-form";
+import type { StartupFormState, StartupPayload } from "@/lib/types";
 
 const STORAGE_KEY = "scout:composer-draft:v1";
 const WRITE_DEBOUNCE_MS = 400;
@@ -73,6 +73,11 @@ export function useComposerDraft() {
     [],
   );
 
+  const applyExtracted = useCallback((payload: StartupPayload) => {
+    setDraftRestored(false);
+    setForm((current) => mergeExtractedForm(current, payload));
+  }, []);
+
   const clearDraft = useCallback(() => {
     setDraftRestored(false);
     setForm(initialFormState);
@@ -85,5 +90,12 @@ export function useComposerDraft() {
 
   const dismissRestoredNotice = useCallback(() => setDraftRestored(false), []);
 
-  return { form, update, clearDraft, draftRestored, dismissRestoredNotice };
+  return {
+    form,
+    update,
+    applyExtracted,
+    clearDraft,
+    draftRestored,
+    dismissRestoredNotice,
+  };
 }

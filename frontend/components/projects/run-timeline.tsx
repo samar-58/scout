@@ -1,7 +1,9 @@
 "use client";
 
-import { RotateCcw } from "lucide-react";
+import { ChevronDown, RotateCcw } from "lucide-react";
+import { useState } from "react";
 import { LocalTime } from "@/components/local-time";
+import { RunActivity } from "@/components/projects/run-activity";
 import { Button } from "@/components/ui/button";
 import { formatDuration } from "@/lib/format";
 import {
@@ -24,9 +26,10 @@ function canResume(run: ResearchRunRecord) {
 /**
  * Run history as rows on a rule.
  *
- * Each run states when it ran, how far it got, and what stopped it. Progress is
- * three ticks rather than three tinted bars: what matters is the boundary
- * between what a resume can skip and what it must redo.
+ * Each run states when it ran, how far it got, and what stopped it — and opens
+ * to the specialists and searches it recorded, replayed from its persisted
+ * events. Progress is three ticks rather than three tinted bars: what matters is
+ * the boundary between what a resume can skip and what it must redo.
  */
 export function RunTimeline({
   runs,
@@ -37,6 +40,20 @@ export function RunTimeline({
   onResume: (runId: string) => void;
   resumingRunId?: string;
 }) {
+  /*
+   * The newest run opens by default: on the Runs tab the activity *is* the
+   * content, and asking for one more click to see the searches and specialists
+   * that were already recorded is a wasted step.
+   */
+  const [openRunId, setOpenRunId] = useState<string>();
+  const [touched, setTouched] = useState(false);
+  const activeRunId = touched ? openRunId : (openRunId ?? runs[0]?.id);
+
+  function toggle(runId: string) {
+    setTouched(true);
+    setOpenRunId(activeRunId === runId ? undefined : runId);
+  }
+
   if (runs.length === 0) {
     return (
       <p className="border-y border-border py-8 text-center text-[13px] text-muted-foreground">
@@ -51,6 +68,7 @@ export function RunTimeline({
         const meta = statusMeta(run.status);
         const reached = phaseIndex(run.checkpoint_stage);
         const busy = resumingRunId === run.id;
+        const open = activeRunId === run.id;
 
         return (
           <li key={run.id} className="py-4">
@@ -77,7 +95,7 @@ export function RunTimeline({
               </span>
 
               <span className="ml-auto flex items-center gap-3">
-                <span className="text-[12px] text-subtle-foreground">
+                <span className="hidden text-[12px] text-subtle-foreground sm:inline">
                   <LocalTime value={run.created_at} />
                 </span>
                 {canResume(run) && (
@@ -92,11 +110,23 @@ export function RunTimeline({
                     {busy ? "Resuming" : "Resume"}
                   </Button>
                 )}
+                <button
+                  type="button"
+                  onClick={() => toggle(run.id)}
+                  aria-expanded={open}
+                  className="inline-flex items-center gap-1 text-[12.5px] text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  Activity
+                  <ChevronDown
+                    size={13}
+                    className={cn("transition-transform", open && "rotate-180")}
+                  />
+                </button>
               </span>
             </div>
 
             {/* Phase ticks: filled for completed phases, hollow for the rest. */}
-            <ul className="mt-2.5 flex items-center gap-4 pl-4">
+            <ul className="mt-2.5 flex flex-wrap items-center gap-4 pl-4">
               {RUN_PHASES.map((phase, order) => {
                 const done = order <= reached;
                 return (
@@ -134,6 +164,15 @@ export function RunTimeline({
                 Last checkpoint: {stageLabel(run.checkpoint_stage)}
               </p>
             ) : null}
+
+            {open && (
+              <div className="mt-2 pl-4">
+                <RunActivity
+                  runId={run.id}
+                  live={run.status === "running" || run.status === "queued"}
+                />
+              </div>
+            )}
           </li>
         );
       })}

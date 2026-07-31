@@ -263,3 +263,16 @@ export function resumeRun(
     fetcher,
   );
 }
+
+export function extractStartupBrief(
+  token: string,
+  text: string,
+  fetcher: typeof fetch = fetch,
+) {
+  return authenticatedMutation<import("@/lib/types").StartupPayload>(
+    "/api/startup/extract",
+    token,
+    { text },
+    fetcher,
+  );
+}

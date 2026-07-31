@@ -1,7 +1,7 @@
 "use client";
 
-import { ArrowRight, ChevronDown, Loader2 } from "lucide-react";
-import { FormEvent, useRef } from "react";
+import { ArrowRight, ChevronDown, Loader2, Sparkles } from "lucide-react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import {
   Collapsible,
   CollapsibleContent,
@@ -9,6 +9,10 @@ import {
 } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import {
+  shouldExtractPastedBrief,
+  STARTUP_BRIEF_MAX_LENGTH,
+} from "@/lib/startup-form";
 import type { StartupFormState } from "@/lib/types";
 
 const EXAMPLES = [
@@ -89,6 +93,10 @@ export function Composer({
   draftRestored = false,
   onClearDraft,
   onDismissRestored,
+  onExtractBrief,
+  isExtractingBrief = false,
+  extractionMessage,
+  extractionError,
 }: {
   form: StartupFormState;
   onUpdate: <K extends keyof StartupFormState>(
@@ -101,12 +109,44 @@ export function Composer({
   draftRestored?: boolean;
   onClearDraft?: () => void;
   onDismissRestored?: () => void;
+  onExtractBrief?: (text: string) => Promise<void>;
+  isExtractingBrief?: boolean;
+  extractionMessage?: string;
+  extractionError?: string;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
+  const [contextOpen, setContextOpen] = useState(false);
 
   const filled = ALL_CONTEXT_KEYS.filter(
     (key) => form[key].trim().length > 0,
   ).length;
+
+  useEffect(() => {
+    if (extractionMessage) setContextOpen(true);
+  }, [extractionMessage]);
+
+  function handleIdeaPaste(event: React.ClipboardEvent<HTMLTextAreaElement>) {
+    if (!onExtractBrief || isExtractingBrief) return;
+    const text = event.clipboardData.getData("text/plain");
+    const target = event.currentTarget;
+    if (
+      !shouldExtractPastedBrief(
+        text,
+        form.idea,
+        target.selectionStart,
+        target.selectionEnd,
+      )
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    const boundedText = text.trim().slice(0, STARTUP_BRIEF_MAX_LENGTH);
+    // Keep the beginning of the paste in the controlled field so provider or
+    // network failure never turns the user's paste into lost input.
+    onUpdate("idea", boundedText.slice(0, IDEA_MAX_LENGTH));
+    void onExtractBrief(boundedText);
+  }
 
   // ⌘/Ctrl+Enter submits from inside the textarea, where plain Enter must stay
   // a newline.
@@ -159,7 +199,9 @@ export function Composer({
             maxLength={IDEA_MAX_LENGTH}
             value={form.idea}
             onChange={(event) => onUpdate("idea", event.target.value)}
+            onPaste={handleIdeaPaste}
             onKeyDown={handleIdeaKeyDown}
+            disabled={isExtractingBrief}
             placeholder="An AI copilot that helps small CPA firms close their books faster…"
             aria-label="Startup idea"
             className="block w-full resize-none bg-transparent px-4 py-3.5 text-[15px] leading-relaxed placeholder:text-subtle-foreground focus:outline-none"
@@ -182,6 +224,7 @@ export function Composer({
                 </span>
                 <input
                   value={form[field.key]}
+                  disabled={isExtractingBrief}
                   onChange={(event) => onUpdate(field.key, event.target.value)}
                   placeholder={field.placeholder}
                   className="min-w-0 flex-1 bg-transparent text-[13px] placeholder:text-subtle-foreground focus:outline-none"
@@ -191,7 +234,11 @@ export function Composer({
           </div>
         </div>
 
-        <Collapsible className="group mt-2">
+        <Collapsible
+          className="group mt-2"
+          open={contextOpen}
+          onOpenChange={setContextOpen}
+        >
           <CollapsibleTrigger asChild>
             <button
               type="button"
@@ -226,6 +273,7 @@ export function Composer({
                         </span>
                         <input
                           value={form[field.key]}
+                          disabled={isExtractingBrief}
                           onChange={(event) =>
                             onUpdate(field.key, event.target.value)
                           }
@@ -241,6 +289,30 @@ export function Composer({
           </CollapsibleContent>
         </Collapsible>
 
+        {isExtractingBrief && (
+          <p
+            role="status"
+            className="mt-4 flex items-center gap-2 text-[13px] text-muted-foreground"
+          >
+            <Loader2 size={13} className="spin" />
+            Reading your brief and filling the form…
+          </p>
+        )}
+        {!isExtractingBrief && extractionMessage && (
+          <p
+            role="status"
+            className="mt-4 flex items-center gap-2 text-[13px] text-foreground"
+          >
+            <Sparkles size={13} />
+            {extractionMessage}
+          </p>
+        )}
+        {extractionError && (
+          <p role="alert" className="mt-4 text-[13px] text-destructive">
+            {extractionError}
+          </p>
+        )}
+
         {error && (
           <p role="alert" className="mt-4 text-[13px] text-destructive">
             {error}
@@ -254,10 +326,14 @@ export function Composer({
           </p>
           <Button
             type="submit"
-            disabled={!form.idea.trim() || isRunning}
+            disabled={!form.idea.trim() || isRunning || isExtractingBrief}
             className="h-9 gap-1.5"
           >
-            {isRunning ? (
+            {isExtractingBrief ? (
+              <>
+                <Loader2 size={14} className="spin" /> Reading brief
+              </>
+            ) : isRunning ? (
               <>
                 <Loader2 size={14} className="spin" /> Starting
               </>

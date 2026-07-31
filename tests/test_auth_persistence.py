@@ -60,6 +60,11 @@ class AuthPersistenceApiTests(unittest.TestCase):
         response = self.client.get("/api/me")
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.json()["detail"], "Authentication required.")
+        extraction = self.client.post(
+            "/api/startup/extract",
+            json={"text": "A detailed startup brief. " * 10},
+        )
+        self.assertEqual(extraction.status_code, 401)
         app.dependency_overrides[get_current_user] = self.override_user
 
     def test_clerk_subject_becomes_authenticated_user(self):
@@ -90,6 +95,44 @@ class AuthPersistenceApiTests(unittest.TestCase):
         self.assertEqual(response.json()["user_id"], "user_from_clerk")
         self.assertEqual(response.json()["session_id"], "session_from_clerk")
         app.dependency_overrides[get_current_user] = self.override_user
+
+    def test_startup_brief_extraction_is_authenticated_and_structured(self):
+        extracted = {
+            "idea": "AI close automation for accounting firms",
+            "problem": "Month-end close is manual.",
+            "target_customer": "Independent accounting firms",
+            "geography": None,
+            "business_model": "B2B SaaS",
+            "current_alternatives": ["Spreadsheets", "QuickBooks"],
+            "customer_pain": "Teams lose two days each month.",
+            "proposed_solution": "Automated reconciliation and close checklists.",
+            "gtm_constraints": None,
+            "pricing_hypothesis": "$99 per firm per month",
+            "stage": "Prototype",
+            "traction": "Three design partners",
+            "team_context": "Former accountant and ML engineer",
+            "known_competitors": ["Digits", "Puzzle"],
+        }
+        brief = "A detailed startup brief. " * 10
+        with patch(
+            "scout.api.extraction.extract_startup_brief",
+            return_value=extracted,
+        ) as extractor:
+            response = self.client.post(
+                "/api/startup/extract",
+                json={"text": brief},
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["target_customer"], "Independent accounting firms")
+        self.assertEqual(response.json()["known_competitors"], ["Digits", "Puzzle"])
+        extractor.assert_called_once_with(brief.strip())
+
+        too_short = self.client.post(
+            "/api/startup/extract",
+            json={"text": "Short idea"},
+        )
+        self.assertEqual(too_short.status_code, 422)
 
     def test_projects_are_isolated_by_clerk_owner(self):
         project = self.create_project()

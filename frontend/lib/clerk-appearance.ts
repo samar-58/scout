@@ -84,6 +84,14 @@ export const scoutClerkAppearance = {
     alertText: "text-sm! text-destructive!",
 
     // Account popover, reachable from every application bar.
+    // Account control. Clerk renders `showName` as name-then-avatar and colours
+    // the identifier from its own palette, which came out near-invisible on the
+    // dark sidebar ground — so both the order and the colour are set here.
+    userButtonBox: "flex-row! gap-2! text-foreground!",
+    userButtonTrigger:
+      "rounded-md! px-1! py-1! shadow-none! hover:bg-muted! focus:shadow-none!",
+    userButtonOuterIdentifier:
+      "order-none! pl-0! text-[13px]! font-medium! text-foreground!",
     userButtonAvatarBox: "rounded-full!",
     userButtonPopoverCard:
       "rounded-xl! border! border-border! bg-popover! text-popover-foreground! shadow-lg!",

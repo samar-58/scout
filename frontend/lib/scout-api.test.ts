@@ -3,6 +3,7 @@ import {
   API_BASE_URL,
   createProject,
   dispatchRun,
+  extractStartupBrief,
   listProjectReports,
   listProjectRuns,
   listProjects,
@@ -53,6 +54,35 @@ describe("createProject", () => {
     expect(createProject("bad-token", startup, fetcher)).rejects.toThrow(
       "Authentication required.",
     );
+  });
+});
+
+describe("extractStartupBrief", () => {
+  test("sends the pasted brief with Clerk authentication", async () => {
+    let capturedUrl = "";
+    let capturedInit: RequestInit | undefined;
+    const fetcher = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      capturedUrl = String(input);
+      capturedInit = init;
+      return new Response(
+        JSON.stringify({
+          idea: "AI close automation for accounting firms",
+          target_customer: "Independent accounting firms",
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }) as unknown as typeof fetch;
+
+    const brief = "A detailed startup brief ".repeat(20);
+    const extracted = await extractStartupBrief("session-token", brief, fetcher);
+
+    expect(capturedUrl).toBe(`${API_BASE_URL}/api/startup/extract`);
+    expect(capturedInit?.method).toBe("POST");
+    expect((capturedInit?.headers as Record<string, string>).Authorization).toBe(
+      "Bearer session-token",
+    );
+    expect(JSON.parse(String(capturedInit?.body))).toEqual({ text: brief });
+    expect(extracted.target_customer).toBe("Independent accounting firms");
   });
 });
 
