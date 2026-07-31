@@ -3,6 +3,21 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from functools import lru_cache
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+ROOT_ENV_FILE = PROJECT_ROOT / ".env"
+
+
+@lru_cache(maxsize=1)
+def load_environment() -> bool:
+    """Load only the repository-root dotenv without overriding real env vars."""
+    return load_dotenv(dotenv_path=ROOT_ENV_FILE, override=False)
+
+
+load_environment()
 
 
 def _csv_env(name: str, default: str = "") -> tuple[str, ...]:
@@ -21,6 +36,9 @@ class Settings:
     clerk_audience: str | None
     clerk_authorized_parties: tuple[str, ...]
     frontend_origins: tuple[str, ...]
+    inngest_event_key: str | None = None
+    inngest_signing_key: str | None = None
+    inngest_app_id: str = "scout"
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -38,6 +56,9 @@ class Settings:
                 ",".join(frontend_origins),
             ),
             frontend_origins=frontend_origins,
+            inngest_event_key=os.getenv("INNGEST_EVENT_KEY") or None,
+            inngest_signing_key=os.getenv("INNGEST_SIGNING_KEY") or None,
+            inngest_app_id=os.getenv("INNGEST_APP_ID", "scout").strip() or "scout",
         )
 
     def require_database_url(self) -> str:

@@ -1,17 +1,22 @@
 "use client";
 
-import { Route, Shield } from "lucide-react";
 import { CanvasSection } from "@/components/canvas/canvas-section";
 import type { ReportGTMStrategy, ReportMoatAnalysis } from "@/lib/report-types";
 
+/**
+ * Moat and go-to-market, as two definition lists side by side.
+ *
+ * Both were bordered cards with sunken headers, an icon tinted from the chart
+ * palette, and — for the moat — a coloured conclusion footer. The conclusion is
+ * the most important line here, so it now leads the column as plain prose
+ * instead of being a tinted afterthought at the bottom.
+ */
 export function MoatGtmPanel({
   moat,
   gtm,
-  index,
 }: {
   moat?: ReportMoatAnalysis;
   gtm?: ReportGTMStrategy;
-  index: number;
 }) {
   const moatRows = [
     { label: "Data", value: moat?.data_moat },
@@ -34,41 +39,34 @@ export function MoatGtmPanel({
   return (
     <CanvasSection
       id="moat"
-      index={index}
-      icon={Shield}
-      eyebrow="Defensibility and distribution"
+      eyebrow="Moat & GTM"
       title="Why this holds, and how it reaches people"
     >
-      <div className="grid gap-3.5 lg:grid-cols-2">
+      <div className="grid gap-x-10 gap-y-7 lg:grid-cols-2">
         {(moatRows.length > 0 || realistic) && (
-          <div className="flex flex-col overflow-hidden rounded-xl border border-border bg-background">
-            <h4 className="flex items-center gap-2 border-b border-border bg-surface-sunken/60 px-4 py-3 text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
-              <Shield size={13} className="text-chart-4" />
+          <div className="min-w-0">
+            <h4 className="border-b border-border pb-2 text-[13px] font-medium">
               Moat
             </h4>
-            <dl className="divide-y divide-border">
+            {realistic && (
+              <p className="pt-3 text-[13px] leading-relaxed text-foreground/85">
+                {realistic}
+              </p>
+            )}
+            <dl className="mt-1">
               {moatRows.map((row) => (
                 <Row key={row.label} label={row.label} value={row.value as string} />
               ))}
             </dl>
-            {realistic && (
-              <p className="mt-auto border-t border-chart-4/25 bg-chart-4/[0.07] px-4 py-3 text-[12.5px] leading-relaxed text-foreground/85">
-                <span className="font-semibold text-chart-4">
-                  Realistically defensible:{" "}
-                </span>
-                {realistic}
-              </p>
-            )}
           </div>
         )}
 
         {gtmRows.length > 0 && (
-          <div className="overflow-hidden rounded-xl border border-border bg-background">
-            <h4 className="flex items-center gap-2 border-b border-border bg-surface-sunken/60 px-4 py-3 text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
-              <Route size={13} className="text-chart-3" />
+          <div className="min-w-0">
+            <h4 className="border-b border-border pb-2 text-[13px] font-medium">
               Go to market
             </h4>
-            <dl className="divide-y divide-border">
+            <dl>
               {gtmRows.map((row) => (
                 <Row key={row.label} label={row.label} value={row.value as string} />
               ))}
@@ -82,11 +80,9 @@ export function MoatGtmPanel({
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="grid gap-1 px-4 py-3 sm:grid-cols-[132px_1fr] sm:gap-4">
-      <dt className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase sm:pt-0.5">
-        {label}
-      </dt>
-      <dd className="text-[12.5px] leading-relaxed text-foreground/80 [overflow-wrap:anywhere]">
+    <div className="grid gap-0.5 border-b border-border py-2.5 sm:grid-cols-[8.5rem_minmax(0,1fr)] sm:gap-4">
+      <dt className="text-[12.5px] text-muted-foreground">{label}</dt>
+      <dd className="text-[13px] leading-relaxed text-foreground/80 [overflow-wrap:anywhere]">
         {value}
       </dd>
     </div>

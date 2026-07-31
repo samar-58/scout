@@ -7,12 +7,9 @@ import { cn } from "@/lib/utils";
 type ThemeChoice = "light" | "dark" | "system";
 
 const STORAGE_KEY = "scout:theme";
-
-const OPTIONS: { value: ThemeChoice; label: string; icon: typeof Sun }[] = [
-  { value: "light", label: "Light", icon: Sun },
-  { value: "system", label: "System", icon: Monitor },
-  { value: "dark", label: "Dark", icon: Moon },
-];
+const ORDER: ThemeChoice[] = ["light", "dark", "system"];
+const ICON = { light: Sun, dark: Moon, system: Monitor };
+const LABEL = { light: "Light", dark: "Dark", system: "System" };
 
 function applyTheme(choice: ThemeChoice) {
   const root = document.documentElement;
@@ -23,16 +20,25 @@ function applyTheme(choice: ThemeChoice) {
   // paint stays instant and the flip feels intentional.
   root.classList.add("theme-transition");
   root.classList.toggle("dark", isDark);
-  window.setTimeout(() => root.classList.remove("theme-transition"), 260);
+  window.setTimeout(() => root.classList.remove("theme-transition"), 240);
 }
 
 /**
- * Three-way theme control. The dark palette existed in the tokens for a while
- * but nothing ever set the `.dark` class, so it was unreachable — this is the
- * switch. The resolved choice is written to localStorage and replayed by an
- * inline script in the document head to avoid a flash of the wrong theme.
+ * One button that cycles light → dark → system.
+ *
+ * This was a three-segment radio group, which is a lot of chrome to spend on a
+ * preference most people set once. A single control showing the *current* state
+ * says the same thing in a third of the space, which is what let the theme
+ * control move into the sidebar footer next to the account.
  */
-export function ThemeToggle({ className }: { className?: string }) {
+export function ThemeToggle({
+  className,
+  compact = false,
+}: {
+  className?: string;
+  /** Icon only, no label — used when the sidebar is collapsed. */
+  compact?: boolean;
+}) {
   const [choice, setChoice] = useState<ThemeChoice>("system");
   const [mounted, setMounted] = useState(false);
 
@@ -58,49 +64,34 @@ export function ThemeToggle({ className }: { className?: string }) {
     return () => media.removeEventListener("change", onChange);
   }, [choice, mounted]);
 
-  function select(value: ThemeChoice) {
-    setChoice(value);
-    applyTheme(value);
+  function cycle() {
+    const next = ORDER[(ORDER.indexOf(choice) + 1) % ORDER.length];
+    setChoice(next);
+    applyTheme(next);
     try {
-      window.localStorage.setItem(STORAGE_KEY, value);
+      window.localStorage.setItem(STORAGE_KEY, next);
     } catch {
       // Best-effort only.
     }
   }
 
+  // Before hydration the icon is fixed, keeping server and client markup equal.
+  const Icon = mounted ? ICON[choice] : Monitor;
+  const label = mounted ? LABEL[choice] : "System";
+
   return (
-    <div
-      role="radiogroup"
-      aria-label="Colour theme"
+    <button
+      type="button"
+      onClick={cycle}
+      title={`Theme: ${label}`}
+      aria-label={`Theme: ${label}. Click to change.`}
       className={cn(
-        "inline-flex items-center gap-0.5 rounded-full border border-border bg-card p-0.5",
+        "grid size-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+        compact && "size-8",
         className,
       )}
     >
-      {OPTIONS.map((option) => {
-        // Before hydration no option is marked active, which keeps the
-        // server and client markup identical.
-        const active = mounted && choice === option.value;
-        return (
-          <button
-            key={option.value}
-            type="button"
-            role="radio"
-            aria-checked={active}
-            aria-label={option.label}
-            title={option.label}
-            onClick={() => select(option.value)}
-            className={cn(
-              "grid h-7 w-7 place-items-center rounded-full transition-colors",
-              active
-                ? "bg-foreground text-background"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground",
-            )}
-          >
-            <option.icon size={13} strokeWidth={2} />
-          </button>
-        );
-      })}
-    </div>
+      <Icon size={14} strokeWidth={2} />
+    </button>
   );
 }

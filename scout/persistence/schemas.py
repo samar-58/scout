@@ -37,6 +37,41 @@ class ProjectRead(BaseModel):
     archived_at: datetime | None
 
 
+class ProjectSummaryRead(ProjectRead):
+    """Project plus list-view aggregates.
+
+    Additive on purpose: `GET /api/projects` still returns every `ProjectRead`
+    field, so existing clients keep working while the workspace sidebar and the
+    projects list read status, counts, and score from the same single request.
+    """
+
+    run_count: int
+    version_count: int
+    latest_version: int | None
+    latest_run_id: UUID | None
+    latest_run_status: str | None
+    latest_run_checkpoint_stage: str | None
+    overall_score: float | None
+    last_activity_at: datetime
+
+    @classmethod
+    def from_summary(cls, summary: Any) -> "ProjectSummaryRead":
+        run = summary.latest_run
+        return cls(
+            **ProjectRead.model_validate(summary.project).model_dump(),
+            run_count=summary.run_count,
+            version_count=summary.version_count,
+            latest_version=summary.latest_version,
+            latest_run_id=run.id if run is not None else None,
+            latest_run_status=run.status if run is not None else None,
+            latest_run_checkpoint_stage=(
+                run.checkpoint_stage if run is not None else None
+            ),
+            overall_score=summary.overall_score,
+            last_activity_at=summary.last_activity_at,
+        )
+
+
 class ResearchRunCreate(BaseModel):
     startup: dict[str, Any]
 
@@ -51,6 +86,8 @@ class ResearchRunRead(BaseModel):
     report_payload: dict[str, Any] | None
     markdown_report: str | None
     error_message: str | None
+    checkpoint_stage: str | None
+    resume_count: int
     started_at: datetime | None
     completed_at: datetime | None
     created_at: datetime

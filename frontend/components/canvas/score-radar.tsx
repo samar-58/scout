@@ -92,14 +92,18 @@ export function ScoreRadar({
           );
         })}
 
-        {/* Scored area */}
+        {/*
+          Scored area in ink, not accent: the shape is the data, and the accent
+          is reserved for things you can click.
+        */}
         <polygon
           points={valuePolygon}
-          fill="var(--brand)"
-          fillOpacity={0.16}
-          stroke="var(--brand)"
-          strokeWidth={1.8}
+          fill="var(--foreground)"
+          fillOpacity={0.08}
+          stroke="var(--foreground)"
+          strokeWidth={1.4}
           strokeLinejoin="round"
+          strokeOpacity={0.75}
         />
 
         {/* Per-dimension vertices, coloured from the analytical palette */}

@@ -1,15 +1,20 @@
 "use client";
 
-import { Crosshair } from "lucide-react";
 import { CanvasSection } from "@/components/canvas/canvas-section";
 import type { ReportCompetitor } from "@/lib/report-types";
 
+/**
+ * The competitive landscape as a table.
+ *
+ * Competitors are the one thing on the canvas that genuinely wants to be
+ * compared column by column — who they serve, what they charge, where they are
+ * weak, and the opening that leaves. As cards with tinted footers that
+ * comparison was impossible; as rows it is the default reading.
+ */
 export function CompetitorBoard({
   competitors,
-  index,
 }: {
   competitors?: ReportCompetitor[];
-  index: number;
 }) {
   const entries = (competitors ?? []).filter((competitor) =>
     competitor.name?.trim(),
@@ -19,65 +24,58 @@ export function CompetitorBoard({
   return (
     <CanvasSection
       id="competitors"
-      index={index}
-      icon={Crosshair}
-      eyebrow="Competitive landscape"
+      eyebrow="Competitors"
       title="Who already owns this customer"
-      description="Each card ends with the opening Scout thinks is left — that is where a wedge can exist."
-      action={
-        <span className="rounded-full border border-border px-2.5 py-1 font-mono text-[10px] text-muted-foreground">
-          {entries.length} mapped
-        </span>
-      }
+      description="Each row ends with the opening Scout thinks is left — that is where a wedge can exist."
     >
-      <div className="grid gap-3.5 xl:grid-cols-2">
-        {entries.map((competitor, position) => (
-          <article
-            key={`${competitor.name}-${position}`}
-            className="flex flex-col overflow-hidden rounded-xl border border-border bg-background transition-all hover:border-brand/40 hover:shadow-md"
-          >
-            <div className="flex items-baseline justify-between gap-3 border-b border-border bg-surface-sunken/60 px-4 py-3">
-              <h4 className="font-serif text-[15.5px] font-semibold tracking-tight [overflow-wrap:anywhere]">
-                {competitor.name}
-              </h4>
-              {competitor.pricing?.trim() && (
-                <span className="shrink-0 rounded-full border border-border bg-card px-2 py-0.5 font-mono text-[11px] text-foreground/70">
-                  {competitor.pricing}
-                </span>
-              )}
-            </div>
-
-            <dl className="space-y-2.5 px-4 py-3.5">
-              {competitor.icp?.trim() && (
-                <Row label="Serves" value={competitor.icp} />
-              )}
-              {competitor.weakness?.trim() && (
-                <Row label="Weakness" value={competitor.weakness} />
-              )}
-            </dl>
-
-            {competitor.opportunity?.trim() && (
-              <p className="mt-auto border-t border-brand/25 bg-brand-muted/50 px-4 py-3 text-[12.5px] leading-relaxed text-foreground/85">
-                <span className="font-semibold text-brand">Your opening: </span>
-                {competitor.opportunity}
-              </p>
-            )}
-          </article>
-        ))}
+      <div className="scroll-touch -mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+        <table className="w-full min-w-[44rem] border-collapse text-left align-top">
+          <thead>
+            <tr className="border-b border-border">
+              <th scope="col" className="label w-[9rem] py-2 pr-4 font-normal">
+                Competitor
+              </th>
+              <th scope="col" className="label py-2 pr-4 font-normal">
+                Serves
+              </th>
+              <th scope="col" className="label py-2 pr-4 font-normal">
+                Weakness
+              </th>
+              <th scope="col" className="label py-2 font-normal">
+                Your opening
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {entries.map((competitor, position) => (
+              <tr
+                key={`${competitor.name}-${position}`}
+                className="border-b border-border align-top"
+              >
+                <th scope="row" className="py-3 pr-4 text-left font-normal">
+                  <span className="block text-[13px] font-medium [overflow-wrap:anywhere]">
+                    {competitor.name}
+                  </span>
+                  {competitor.pricing?.trim() && (
+                    <span className="mt-0.5 block text-[12px] text-muted-foreground">
+                      {competitor.pricing}
+                    </span>
+                  )}
+                </th>
+                <td className="py-3 pr-4 text-[12.5px] leading-relaxed text-muted-foreground">
+                  {competitor.icp?.trim() || "—"}
+                </td>
+                <td className="py-3 pr-4 text-[12.5px] leading-relaxed text-muted-foreground">
+                  {competitor.weakness?.trim() || "—"}
+                </td>
+                <td className="py-3 text-[12.5px] leading-relaxed text-foreground/85">
+                  {competitor.opportunity?.trim() || "—"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </CanvasSection>
-  );
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="grid gap-1 sm:grid-cols-[84px_1fr] sm:gap-4">
-      <dt className="text-[10px] font-semibold tracking-[0.12em] text-muted-foreground uppercase sm:pt-0.5">
-        {label}
-      </dt>
-      <dd className="text-[12.5px] leading-relaxed text-foreground/80 [overflow-wrap:anywhere]">
-        {value}
-      </dd>
-    </div>
   );
 }

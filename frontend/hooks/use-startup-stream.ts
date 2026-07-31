@@ -1,11 +1,16 @@
 "use client";
 
-import { useChat } from "@ai-sdk/react";
 import { useAuth } from "@clerk/nextjs";
-import { DefaultChatTransport } from "ai";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { withQueuedAgents } from "@/lib/agent-meta";
-import { API_BASE_URL, createProject } from "@/lib/scout-api";
+import {
+  cancelRun as cancelPersistedRun,
+  createProject,
+  dispatchRun,
+  getRun,
+  listRunEvents,
+  type StreamEventRecord,
+} from "@/lib/scout-api";
 import type {
   AgentEvent,
   ReportEvent,
@@ -19,36 +24,80 @@ export type RunOutcome = "idle" | "running" | "done" | "cancelled" | "error";
 export function useStartupStream() {
   const { getToken } = useAuth();
   const [localError, setLocalError] = useState<string>();
-  const [assistantBaseline, setAssistantBaseline] = useState(0);
   const [runOutcome, setRunOutcome] = useState<RunOutcome>("idle");
   const [projectId, setProjectId] = useState<string>();
+  const [runId, setRunId] = useState<string>();
+  const [domainEvents, setDomainEvents] = useState<StreamEventRecord[]>([]);
+  const lastSequenceRef = useRef(0);
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollingRef = useRef(false);
 
-  const transport = useMemo(
-    () =>
-      new DefaultChatTransport({
-        api: `${API_BASE_URL}/api/runs/stream`,
-      }),
-    [],
+  const stopPolling = useCallback(() => {
+    if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+    pollTimerRef.current = null;
+  }, []);
+
+  const pollRun = useCallback(
+    async (activeRunId: string, token: string) => {
+      if (pollingRef.current) return;
+      pollingRef.current = true;
+      try {
+        const [events, run] = await Promise.all([
+          listRunEvents(token, activeRunId, lastSequenceRef.current),
+          getRun(token, activeRunId),
+        ]);
+        const appendEvents = (nextEvents: StreamEventRecord[]) => {
+          if (nextEvents.length === 0) return;
+          lastSequenceRef.current = nextEvents[nextEvents.length - 1].sequence;
+          setDomainEvents((current) => [...current, ...nextEvents]);
+        };
+        appendEvents(events);
+
+        const terminal = ["completed", "failed", "cancelled"].includes(run.status);
+        if (terminal) {
+          // The run and its terminal events commit atomically, but the parallel
+          // requests above can observe opposite sides of that commit. A second
+          // event read after terminal status is visible guarantees the tail is
+          // drained before polling stops.
+          appendEvents(
+            await listRunEvents(token, activeRunId, lastSequenceRef.current),
+          );
+        }
+        if (run.status === "completed") {
+          setRunOutcome("done");
+          stopPolling();
+          return;
+        }
+        if (run.status === "failed") {
+          setLocalError(run.error_message ?? "Research run failed.");
+          setRunOutcome("error");
+          stopPolling();
+          return;
+        }
+        if (run.status === "cancelled") {
+          setRunOutcome("cancelled");
+          stopPolling();
+          return;
+        }
+      } catch (pollError) {
+        setLocalError(
+          pollError instanceof Error ? pollError.message : "Could not refresh the run.",
+        );
+        setRunOutcome("error");
+        stopPolling();
+        return;
+      } finally {
+        pollingRef.current = false;
+      }
+      pollTimerRef.current = setTimeout(
+        () => void pollRun(activeRunId, token),
+        750,
+      );
+    },
+    [stopPolling],
   );
 
-  const { messages, sendMessage, status, error, stop, clearError } = useChat({
-    transport,
-    onError: (chatError) => {
-      setLocalError(chatError.message);
-      setRunOutcome("error");
-    },
-    onFinish: ({ isAbort, isError }) => {
-      setRunOutcome(isAbort ? "cancelled" : isError ? "error" : "done");
-    },
-  });
-
-  const assistantMessages = messages.filter(
-    (message) => message.role === "assistant",
-  );
-  const latestAssistant =
-    assistantMessages.length > assistantBaseline
-      ? assistantMessages[assistantMessages.length - 1]
-      : undefined;
+  useEffect(() => stopPolling, [stopPolling]);
 
   const { agents, searches, sources, score, report, markdown } = useMemo(() => {
     const agentMap = new Map<string, AgentEvent>();
@@ -58,23 +107,31 @@ export function useStartupStream() {
     let reportEvent: ReportEvent | undefined;
     let text = "";
 
-    for (const part of latestAssistant?.parts ?? []) {
-      const partType = part.type as string;
-      if (partType === "text") {
-        text += (part as { text: string }).text;
-      } else if (partType === "data-agent") {
-        const event = (part as { data: AgentEvent }).data;
+    for (const record of domainEvents) {
+      const payload = record.payload;
+      const eventType = String(payload.type ?? record.event_type);
+      if (eventType === "agent_status") {
+        const event = payload as unknown as AgentEvent;
         agentMap.set(event.agent, event);
-      } else if (partType === "data-search") {
-        const event = (part as { data: SearchEvent }).data;
+      } else if (
+        eventType === "search_start" ||
+        eventType === "search_end" ||
+        eventType === "evidence_ready"
+      ) {
+        const event = payload as unknown as SearchEvent;
         if (event.index) searchMap.set(event.index, event);
-      } else if (partType === "data-score") {
-        scoreEvent = (part as { data: ScoreEvent }).data;
-      } else if (partType === "data-report") {
-        reportEvent = (part as { data: ReportEvent }).data;
-      } else if (partType === "source-url") {
-        const source = part as { url: string; title?: string };
-        if (source.url) sourceMap.set(source.url, source);
+      } else if (eventType === "score") {
+        scoreEvent = payload as unknown as ScoreEvent;
+      } else if (eventType === "source") {
+        const source = (payload as { source?: { url?: string; title?: string } }).source;
+        if (source?.url) sourceMap.set(source.url, { url: source.url, title: source.title });
+      } else if (eventType === "report_delta") {
+        text += String(payload.delta ?? "");
+      } else if (eventType === "run_end") {
+        reportEvent = {
+          status: "completed",
+          report: (payload as { report?: ReportEvent["report"] }).report,
+        };
       }
     }
 
@@ -88,50 +145,52 @@ export function useStartupStream() {
       report: reportEvent,
       markdown: text,
     };
-  }, [latestAssistant]);
+  }, [domainEvents]);
 
-  const isRunning = status === "submitted" || status === "streaming";
-  const displayStatus = localError || error
-    ? "error"
-    : isRunning
-      ? status
-      : runOutcome;
+  const isRunning = runOutcome === "running";
+  const displayStatus = localError ? "error" : runOutcome;
 
   async function submit(message: string, body: Record<string, unknown>) {
-    setAssistantBaseline(assistantMessages.length);
+    stopPolling();
     setRunOutcome("running");
     setLocalError(undefined);
-    clearError();
+    setDomainEvents([]);
+    lastSequenceRef.current = 0;
 
     try {
       const token = await getToken();
       if (!token) throw new Error("Your session has expired. Please sign in again.");
-
       const startup = body.startup as StartupPayload | undefined;
       if (!startup?.idea) throw new Error("A startup idea is required.");
 
       const project = await createProject(token, startup);
       setProjectId(project.id);
-      await sendMessage(
-        { text: message },
-        {
-          body: { ...body, project_id: project.id },
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      );
+      const run = await dispatchRun(token, project.id, startup, message);
+      setRunId(run.id);
+      await pollRun(run.id, token);
     } catch (submissionError) {
-      const message =
+      setLocalError(
         submissionError instanceof Error
           ? submissionError.message
-          : "Could not start the research run.";
-      setLocalError(message);
+          : "Could not start the research run.",
+      );
       setRunOutcome("error");
     }
   }
 
-  function cancelRun() {
+  async function cancelRun() {
+    stopPolling();
     setRunOutcome("cancelled");
-    stop();
+    if (!runId) return;
+    try {
+      const token = await getToken();
+      if (token) await cancelPersistedRun(token, runId);
+    } catch (cancelError) {
+      setLocalError(
+        cancelError instanceof Error ? cancelError.message : "Could not cancel the run.",
+      );
+      setRunOutcome("error");
+    }
   }
 
   return {
@@ -144,7 +203,7 @@ export function useStartupStream() {
     projectId,
     isRunning,
     displayStatus,
-    error: localError || error?.message,
+    error: localError,
     submit,
     cancelRun,
   };

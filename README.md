@@ -18,7 +18,8 @@ The seven specialists are Market Analyst, Competitor Analyst, Customer Analyst, 
 - **Backend:** FastAPI, Uvicorn, Python 3.14+, LangGraph, LangChain
 - **Research:** Tavily advanced search, normalized and URL-deduplicated evidence
 - **Models:** Groq via `langchain-groq`, with configurable specialist and synthesis models
-- **Transport:** Server-Sent Events using the AI SDK UI Message Stream Protocol
+- **Orchestration:** Inngest durable functions with independently retryable research stages
+- **Transport:** Ordered event polling for durable runs; AI SDK SSE retained for compatibility
 - **Authentication:** Clerk for Next.js sessions and backend bearer-token verification
 - **Persistence:** PostgreSQL through SQLAlchemy and Alembic
 
@@ -40,6 +41,9 @@ Set the required service keys, database URL, Clerk backend key, and allowed brow
 GROQ_API_KEY=your-groq-key
 TAVILY_API_KEY=your-tavily-key
 DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/scout
+INNGEST_APP_ID=scout
+INNGEST_EVENT_KEY=your-inngest-event-key
+INNGEST_SIGNING_KEY=signkey-prod-your-inngest-signing-key
 CLERK_SECRET_KEY=sk_test_your-clerk-secret-key
 CLERK_AUTHORIZED_PARTIES=http://localhost:3001,http://127.0.0.1:3001
 FRONTEND_ORIGINS=http://localhost:3001,http://127.0.0.1:3001
@@ -87,10 +91,16 @@ Start the backend on port 3000:
 ```bash
 uv sync
 uv run alembic upgrade head
-uv run uvicorn main:app --reload --host 0.0.0.0 --port 3000
+INNGEST_DEV=1 uv run uvicorn main:app --reload --host 0.0.0.0 --port 3000
 ```
 
-In a second terminal, install and start the frontend on port 3001:
+In another terminal, start Inngest's local Dev Server and point it at the FastAPI handler:
+
+```bash
+inngest dev -u http://localhost:3000/api/inngest
+```
+
+In a third terminal, install and start the frontend on port 3001:
 
 ```bash
 cd frontend
@@ -103,11 +113,15 @@ Open <http://localhost:3001>. Restart Next.js after changing `NEXT_PUBLIC_API_BA
 ## Frontend experience
 
 - **Landing page:** explains the workflow and introduces the specialist team before the user opens Scout.
-- **Startup composer:** captures the idea plus optional problem, target customer, geography, business model, current alternatives, customer pain, proposed solution, GTM constraints, pricing hypothesis, stage, traction, team context, and known competitors.
+- **Application bar:** one shared bar across the composer, live run, projects list, and saved project — brand, breadcrumbs, run status, actions, theme control, and the Clerk account menu. Clerk's sign-in, sign-up, and account popover are themed to the Scout palette instead of Clerk's defaults.
+- **Auth pages:** split-screen sign-in and sign-up. An ink narrative panel carries the workflow, the specialist roster, and headline numbers; the form column is all that renders on small screens.
+- **Startup composer:** captures the idea plus optional problem, target customer, geography, business model, current alternatives, customer pain, proposed solution, GTM constraints, pricing hypothesis, stage, traction, team context, and known competitors. Signed-in users also get a "continue where you left off" strip of recent saved projects.
 - **Live research:** shows all seven specialists immediately as queued placeholders. They transition through running, completed, or failed states as lifecycle events arrive. Search cards show purpose, query, result count, timing, errors, and source links.
 - **Progress feedback:** the main active-run indicator uses a calm live pulse; status counters show agent and search progress without blocking the page.
 - **Report view:** renders streamed Markdown with score breakdown, navigable headings, verified source links, Copy, and Download Markdown actions. The layout is fully mobile responsive: the score breakdown and rationale reflow to a single column on small screens, headings scale down, wide tables scroll horizontally within a bordered container, and the research-activity panel collapses so the report stays front and centre.
-- **Run controls:** Back and Stop warn before interrupting active research. Projects, ordered events, and completed report versions are persisted; cancelling a run preserves its history but does not create a final report.
+- **Run controls:** Back and Stop warn before interrupting active research. Projects, ordered events, stage-level graph checkpoints, and completed report versions are persisted. Failed or cancelled runs can resume from the latest completed stage without repeating saved searches or specialist work.
+- **Saved projects:** `/projects` lists every owned workspace as a card carrying its verdict score ring, six dimension bars, run status, run and version counts, with a portfolio stats strip, text search, and status filters. Each project page opens immutable report versions in the existing startup canvas through a version switcher, and shows run history as a timeline with per-run phase progress (evidence → specialists → synthesis) and inline resume.
+- **Timestamps:** run and version times render in the viewer's locale, swapped in after mount so server-rendered markup stays locale-independent.
 
 ## Backend API
 
@@ -127,14 +141,17 @@ All `/api/*` routes require a Clerk session token in `Authorization: Bearer <tok
 - `POST/GET /api/projects` — create or list owned projects.
 - `GET/PATCH/DELETE /api/projects/{project_id}` — read, update, or archive an owned project.
 - `POST/GET /api/projects/{project_id}/runs` — create or list research runs.
-- `POST /api/runs/stream` — create and execute a persisted run using `project_id`, `messages`, and `startup` in the request body.
-- `GET /api/runs/{run_id}` and `POST /api/runs/{run_id}/cancel` — inspect or cancel an owned run.
+- `POST /api/runs` — create and dispatch a durable Inngest run; returns the queued run immediately.
+- `POST /api/runs/{run_id}/resume` — dispatch a failed or cancelled run from its latest completed graph stage.
+- `POST /api/runs/stream` — compatibility path that creates and executes a request-coupled persisted SSE run.
+- `GET /api/runs/{run_id}` and `POST /api/runs/{run_id}/cancel` — inspect or cancel an owned run and its Inngest execution.
+- `POST /api/runs/{run_id}/resume/stream` — compatibility path for request-coupled resume.
 - `GET /api/runs/{run_id}/events?after=N` — replay ordered persisted domain events.
 - `GET /api/projects/{project_id}/reports` — list immutable report versions.
 
 ### Legacy streaming route
 
-`POST /startup/stress-test/v2/stream` remains available for compatibility. The authenticated Next.js client uses `POST /api/runs/stream`, which wraps the same graph while persisting the project, run, events, and completed artifact. Both accept a UI-message envelope with a non-empty `messages` array and a nested `startup` payload:
+`POST /startup/stress-test/v2/stream` remains available for compatibility. The authenticated Next.js client dispatches `POST /api/runs`, then polls `GET /api/runs/{run_id}/events?after=N` and `GET /api/runs/{run_id}` while Inngest executes independently. The compatibility `/api/runs/stream` route wraps the same graph in a request-coupled persisted stream. Streaming routes accept a UI-message envelope with a non-empty `messages` array and a nested `startup` payload:
 
 ```json
 {
@@ -178,7 +195,9 @@ The stream includes observable UI events such as:
 
 ## Architecture
 
-Backend code lives under the `scout` package: `api/` contains authenticated and compatibility routers, `core/` owns auth/configuration, `persistence/` owns SQLAlchemy data access, `research/` contains LangGraph orchestration, `streaming/` adapts domain events to AI SDK SSE, and `legacy/` isolates the tutorial chat workflow. Root `main.py` is intentionally only the stable `uvicorn main:app` entry point.
+Backend code lives under the `scout` package: `api/` contains authenticated and compatibility routers, `core/` owns auth/configuration, `persistence/` owns SQLAlchemy data access, `research/` contains LangGraph orchestration, `workflows/` owns Inngest durable execution, `streaming/` adapts domain events to AI SDK SSE, and `legacy/` isolates the tutorial chat workflow. Root `main.py` remains the stable `uvicorn main:app` entry point, and `/api/inngest` serves signed Inngest discovery and execution requests.
+
+The durable workflow stores no large research state in Inngest step outputs. Every step reloads canonical state by owned `run_id`; evidence, seven parallel specialist steps, and synthesis are independently memoized. Parallel specialist deltas merge under a PostgreSQL row lock, ordered events receive database-backed sequences, and report creation plus terminal events commit atomically. Duplicate dispatches and retried steps are idempotent.
 
 The v2 graph follows a bounded research pipeline:
 
@@ -229,8 +248,12 @@ The test suite covers request validation, blocking and streaming responses, SSE 
 ## Current limitations
 
 - The provider does not expose token-by-token model streaming. The completed structured report is generated after synthesis and its Markdown is emitted in 500-character SSE chunks.
-- In-flight synchronous provider calls may not stop immediately after the browser aborts the stream.
-- Research execution still runs inside the API process; a backend restart interrupts active work even though prior events remain persisted.
-- The frontend does not yet include a project-history dashboard or run reconnection UI; the authenticated APIs expose the stored data.
+- In-flight synchronous provider calls may not stop immediately after cancellation, but cancelled runs reject later stage commits.
 - Canvas assumption and experiment status changes are still browser-local and are not first-class persisted records yet.
 - Distributed rate limiting and production telemetry are not implemented.
+
+### Vercel and Inngest production deployment
+
+Vercel detects the root `main.py` FastAPI `app` as the Python function entrypoint. `vercel.json` gives each independently durable Inngest invocation up to 300 seconds; Inngest's 30-minute finish timeout covers the complete multi-step function, not one Vercel request.
+
+For the backend Vercel project, set `DATABASE_URL`, provider keys, Clerk settings, `INNGEST_APP_ID=scout`, `INNGEST_EVENT_KEY`, and `INNGEST_SIGNING_KEY`. Do not set `INNGEST_DEV` in production. After deployment, sync `https://<backend-domain>/api/inngest` in Inngest Cloud. The endpoint derives its public origin from the signed request, while `main.py` remains the local `uvicorn main:app` entrypoint.

@@ -501,6 +501,36 @@ class StartupStressTestEndpointTests(unittest.TestCase):
         self.assertEqual(runnable.calls, 2)
         sleep.assert_called_once_with(0.5)
 
+    def test_structured_validation_failure_is_retried_when_enabled(self):
+        class InvalidThenValid:
+            def __init__(self):
+                self.calls = 0
+
+            def invoke(self, _messages):
+                self.calls += 1
+                if self.calls < 3:
+                    raise ValueError("The model response did not contain valid JSON.")
+                return {"ok": True}
+
+        runnable = InvalidThenValid()
+        events = []
+        with patch("scout.research.startup_graph.time.sleep") as sleep:
+            result = _invoke_with_retry(
+                runnable,
+                [],
+                writer=events.append,
+                agent_name="synthesizer",
+                display_name="Synthesizer",
+                retry_structured=True,
+            )
+
+        self.assertEqual(result, {"ok": True})
+        self.assertEqual(runnable.calls, 3)
+        self.assertEqual(sleep.call_count, 2)
+        self.assertTrue(
+            all("invalid structured output" in event["message"] for event in events)
+        )
+
     def test_specialist_invalid_local_json_emits_failure_and_falls_back(self):
         model = RecordingStructuredModel(
             "qwen/qwen3.6-27b",
@@ -1001,6 +1031,10 @@ class StartupStressTestEndpointTests(unittest.TestCase):
 
     def test_v2_streaming_runner_emits_search_agent_score_source_and_report_events(self):
         fake_search = FakeDuplicateSearch()
+        checkpoints = []
+
+        async def save_checkpoint(payload, stage):
+            checkpoints.append((payload, stage))
 
         with (
             patch("scout.research.startup_graph._get_tavily_search", return_value=fake_search),
@@ -1013,7 +1047,8 @@ class StartupStressTestEndpointTests(unittest.TestCase):
                         StartupStressTestV2Request(
                             idea="AI copilot for accountants",
                             target_customer="small accounting firms",
-                        )
+                        ),
+                        checkpoint_callback=save_checkpoint,
                     )
                 )
             )
@@ -1031,6 +1066,45 @@ class StartupStressTestEndpointTests(unittest.TestCase):
         self.assertIn("run_end", event_types)
         self.assertEqual(events[-1]["type"], "run_end")
         self.assertEqual(events[-1]["report"]["scores"]["overall"], 62)
+        checkpoint_stages = [stage for _payload, stage in checkpoints]
+        self.assertIn("evidence", checkpoint_stages)
+        for agent_id in (
+            "market_analyst",
+            "competitor_analyst",
+            "customer_analyst",
+            "gtm_agent",
+            "vc_partner",
+            "moat_agent",
+            "experiment_agent",
+        ):
+            self.assertIn(agent_id, checkpoint_stages)
+        self.assertEqual(len(checkpoints[-1][0]["agent_outputs"]), 7)
+
+        with (
+            patch("scout.research.startup_graph._get_tavily_search", return_value=fake_search),
+            patch("scout.research.startup_graph.llm", FakeLLM()),
+            patch("scout.research.startup_graph.specialist_llm", FakeLLM()),
+        ):
+            resumed_events = asyncio.run(
+                collect_stream(
+                    stream_startup_stress_test_v2(
+                        StartupStressTestV2Request(
+                            idea="AI copilot for accountants",
+                            target_customer="small accounting firms",
+                        ),
+                        resume_state=checkpoints[-1][0],
+                    )
+                )
+            )
+
+        self.assertEqual(len(fake_search.queries), 8)
+        restored = [
+            event
+            for event in resumed_events
+            if event.get("type") == "agent_status" and event.get("restored")
+        ]
+        self.assertEqual(len(restored), 7)
+        self.assertEqual(resumed_events[-1]["type"], "run_end")
 
 
 if __name__ == "__main__":

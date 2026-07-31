@@ -1,6 +1,7 @@
 import { ClerkProvider } from "@clerk/nextjs";
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Inter, JetBrains_Mono } from "next/font/google";
+import { scoutClerkAppearance } from "@/lib/clerk-appearance";
 import "./globals.css";
 
 const inter = Inter({
@@ -44,7 +45,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <ClerkProvider>
+    <ClerkProvider appearance={scoutClerkAppearance}>
       <html lang="en" suppressHydrationWarning>
         <head>
           {/*

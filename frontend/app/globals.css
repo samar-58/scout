@@ -5,159 +5,172 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Scout design tokens.
+ * Scout design system.
  *
- * Foundation: warm paper and ink with a burnt-amber brand accent — editorial,
- * not generic AI blue. What changed: the palette used to be a flat two-surface
- * monochrome, which read as austere. It now carries
+ * Rules, in priority order. Every one of them exists because the earlier
+ * palette broke it and the interface looked machine-assembled as a result.
  *
- *   - four layered surfaces (sunken → page → raised → floating) so panels can
- *     sit on top of each other legibly instead of relying on borders alone,
- *   - a six-hue analytical palette for the score dimensions, kept in the warm
- *     earthy family so charts feel like a printed annual report,
- *   - warm-tinted elevation instead of neutral grey shadow,
- *   - a real dark theme, reachable via the .dark class on <html>.
- *
- * Semantic colours stay reserved for status. Chart colours are only for data.
+ * 1. One ink, one paper. Surfaces differ by a few percent of lightness, never
+ *    by hue. Panels are separated by hairlines and space, not by tinted fills.
+ * 2. One accent (amber), spent only on: the active navigation marker, the live
+ *    pulse, focus rings, and inline links. It is never a decorative label
+ *    colour and never fills a panel.
+ * 3. Status is a dot and a word, not a coloured box. Semantic colours are
+ *    reserved for that dot, for error text, and for the verdict dial.
+ * 4. Data is monochrome. The six score dimensions read as a graphite ramp, so a
+ *    chart looks like print, not like a toy. Charts carry meaning through
+ *    position and length; colour adds nothing there.
+ * 5. Depth is for things that float. Menus, dialogs, and drawers cast shadows;
+ *    cards and panels do not.
+ * 6. Metadata is small and quiet — 12px muted text. Uppercase mono is a
+ *    structural device (column heads, section eyebrows), capped at roughly one
+ *    use per region.
  */
 :root {
   --radius: 0.625rem;
 
-  /* Layered warm paper */
-  --background: #f7f5f0;
-  --surface-sunken: #efece4;
-  --foreground: #1a1815;
-  --card: #fffefb;
-  --card-foreground: #1a1815;
+  /* Paper: four steps, same hue, a few percent apart. */
+  --background: #faf9f6;
+  --surface-sunken: #f2f0ea;
+  --card: #ffffff;
   --floating: #ffffff;
-  --popover: #fffefb;
-  --popover-foreground: #1a1815;
+  --popover: #ffffff;
+
+  --foreground: #191714;
+  --card-foreground: #191714;
+  --popover-foreground: #191714;
+  --muted: #f0eee8;
+  --muted-foreground: #6f6a61;
+  --subtle-foreground: #8b8578;
 
   /* Ink primary action */
-  --primary: #1a1815;
-  --primary-foreground: #f7f5f0;
-  --secondary: #eeeae1;
-  --secondary-foreground: #29251f;
-  --muted: #eeeae1;
-  --muted-foreground: #726c62;
-  --accent: #eeeae1;
-  --accent-foreground: #1a1815;
+  --primary: #191714;
+  --primary-foreground: #faf9f6;
+  --secondary: #f0eee8;
+  --secondary-foreground: #262320;
+  --accent: #f0eee8;
+  --accent-foreground: #191714;
 
-  /* Brand accent — burnt amber */
-  --brand: #b0500a;
-  --brand-hover: #94420a;
-  --brand-foreground: #fffefb;
-  --brand-muted: #f7e9d7;
-  --brand-ring: #d98530;
+  /* The single accent. */
+  --brand: #a8500f;
+  --brand-hover: #8d420c;
+  --brand-foreground: #ffffff;
+  --brand-muted: #f4e8dc;
+  --brand-ring: #c2762f;
 
-  /* Semantic (status only) */
-  --success: #15703c;
+  /* Status — dots, text, dial. Not fills. */
+  --success: #1a6b3c;
   --success-foreground: #f0fdf4;
-  --success-muted: #e2f2e6;
-  --warning: #a8620a;
+  --success-muted: #e8f1ea;
+  --warning: #96590a;
   --warning-foreground: #fffbeb;
-  --warning-muted: #f9ecd8;
-  --destructive: #ad2318;
+  --warning-muted: #f5ecdd;
+  --destructive: #a52a1d;
   --destructive-foreground: #fef2f2;
-  --destructive-muted: #f8e4e1;
-  --info: #1a1815;
-  --info-foreground: #f7f5f0;
+  --destructive-muted: #f6e7e4;
+  --info: #191714;
+  --info-foreground: #faf9f6;
 
-  /* Analytical palette — one hue per scored dimension, warm and print-like */
-  --chart-1: #b0500a; /* market — amber      */
-  --chart-2: #9c3412; /* competition — rust  */
-  --chart-3: #4d6a18; /* distribution — olive*/
-  --chart-4: #0f6f68; /* execution — teal    */
-  --chart-5: #3b3899; /* timing — indigo     */
-  --chart-6: #8a1a72; /* monetization — plum */
+  /* Graphite data ramp: dark → light, ordered as the dimensions are. */
+  --chart-1: #2a2723;
+  --chart-2: #423d37;
+  --chart-3: #5b544b;
+  --chart-4: #766e63;
+  --chart-5: #948b7e;
+  --chart-6: #b3aa9c;
 
-  --border: #e2ddd2;
-  --border-strong: #cfc8b9;
-  --input: #e2ddd2;
-  --ring: #b0500a;
-  --grid-line: #e2ddd2;
+  --border: #e5e1d8;
+  --border-strong: #d0cabd;
+  --input: #ded9cf;
+  --ring: #c2762f;
+  --grid-line: #ebe7de;
+
+  /* Permanently dark panel (auth narrative, landing footer). */
+  --ink-panel: #171512;
+  --ink-panel-foreground: #f6f4ef;
 
   /* Typography */
   --font-sans: var(--font-inter), "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-serif: var(--font-fraunces), "Fraunces", Georgia, serif;
   --font-mono: var(--font-mono-jbmono), "JetBrains Mono", ui-monospace, monospace;
 
-  /* Warm elevation — shadows tinted with the ink hue, never neutral grey */
-  --shadow-color: 32 26 18;
-  --shadow-xs: 0 1px 2px rgb(var(--shadow-color) / 0.05);
-  --shadow-sm:
-    0 1px 2px rgb(var(--shadow-color) / 0.05),
-    0 2px 6px -1px rgb(var(--shadow-color) / 0.06);
+  /* Depth, for floating layers only. */
+  --shadow-color: 26 22 16;
+  --shadow-xs: 0 1px 1px rgb(var(--shadow-color) / 0.04);
+  --shadow-sm: 0 1px 2px rgb(var(--shadow-color) / 0.06);
   --shadow-md:
     0 2px 4px rgb(var(--shadow-color) / 0.05),
-    0 8px 20px -6px rgb(var(--shadow-color) / 0.1);
+    0 8px 24px -8px rgb(var(--shadow-color) / 0.12);
   --shadow-lg:
-    0 4px 8px rgb(var(--shadow-color) / 0.05),
-    0 18px 40px -12px rgb(var(--shadow-color) / 0.14);
+    0 4px 8px rgb(var(--shadow-color) / 0.06),
+    0 24px 48px -16px rgb(var(--shadow-color) / 0.18);
 }
 
 .dark {
-  --background: #100e0c;
-  --surface-sunken: #0a0908;
-  --foreground: #f2eee6;
-  --card: #1a1713;
-  --card-foreground: #f2eee6;
-  --floating: #221e19;
-  --popover: #1a1713;
-  --popover-foreground: #f2eee6;
+  --background: #131110;
+  --surface-sunken: #0d0c0b;
+  --card: #1a1816;
+  --floating: #201d1a;
+  --popover: #201d1a;
 
-  --primary: #f2eee6;
-  --primary-foreground: #1a1713;
-  --secondary: #221e19;
-  --secondary-foreground: #e4dfd5;
-  --muted: #231f1a;
-  --muted-foreground: #a29a8b;
-  --accent: #231f1a;
-  --accent-foreground: #f2eee6;
+  --foreground: #f2efe9;
+  --card-foreground: #f2efe9;
+  --popover-foreground: #f2efe9;
+  --muted: #221f1c;
+  --muted-foreground: #9b948a;
+  --subtle-foreground: #7d766c;
 
-  --brand: #e08c3a;
-  --brand-hover: #eda252;
-  --brand-foreground: #1a1713;
-  --brand-muted: #33230f;
-  --brand-ring: #e08c3a;
+  --primary: #f2efe9;
+  --primary-foreground: #1a1816;
+  --secondary: #221f1c;
+  --secondary-foreground: #e3dfd7;
+  --accent: #242120;
+  --accent-foreground: #f2efe9;
 
-  --success: #4fbe78;
+  --brand: #d98c3f;
+  --brand-hover: #e59f55;
+  --brand-foreground: #1a1816;
+  --brand-muted: #2c2013;
+  --brand-ring: #d98c3f;
+
+  --success: #52b97a;
   --success-foreground: #06240f;
-  --success-muted: #122b1a;
-  --warning: #e2a54e;
+  --success-muted: #14261a;
+  --warning: #d9a052;
   --warning-foreground: #251803;
-  --warning-muted: #2f2210;
-  --destructive: #ef6f66;
+  --warning-muted: #2a2113;
+  --destructive: #e8776c;
   --destructive-foreground: #2a0a08;
-  --destructive-muted: #331613;
-  --info: #f2eee6;
-  --info-foreground: #1a1713;
+  --destructive-muted: #2e1614;
+  --info: #f2efe9;
+  --info-foreground: #1a1816;
 
-  /* Lifted for contrast against the dark ground */
-  --chart-1: #e59547;
-  --chart-2: #e8794f;
-  --chart-3: #a3c258;
-  --chart-4: #3fb8ab;
-  --chart-5: #8b87e8;
-  --chart-6: #d167b4;
+  /* Ramp inverts: light → dark, so the first dimension stays the strongest. */
+  --chart-1: #ece8e0;
+  --chart-2: #cdc7bc;
+  --chart-3: #ada699;
+  --chart-4: #8d8578;
+  --chart-5: #6e675c;
+  --chart-6: #514b43;
 
-  --border: #2e2823;
-  --border-strong: #453d34;
-  --input: #2e2823;
-  --ring: #e08c3a;
-  --grid-line: #2a241f;
+  --border: #2a2622;
+  --border-strong: #3d3830;
+  --input: #302b26;
+  --ring: #d98c3f;
+  --grid-line: #221f1b;
+
+  --ink-panel: #0a0908;
+  --ink-panel-foreground: #f2efe9;
 
   --shadow-color: 0 0 0;
-  --shadow-xs: 0 1px 2px rgb(var(--shadow-color) / 0.3);
-  --shadow-sm:
-    0 1px 2px rgb(var(--shadow-color) / 0.3),
-    0 2px 6px -1px rgb(var(--shadow-color) / 0.35);
+  --shadow-xs: 0 1px 1px rgb(var(--shadow-color) / 0.2);
+  --shadow-sm: 0 1px 2px rgb(var(--shadow-color) / 0.3);
   --shadow-md:
     0 2px 4px rgb(var(--shadow-color) / 0.3),
-    0 8px 20px -6px rgb(var(--shadow-color) / 0.45);
+    0 8px 24px -8px rgb(var(--shadow-color) / 0.5);
   --shadow-lg:
-    0 4px 8px rgb(var(--shadow-color) / 0.3),
-    0 18px 40px -12px rgb(var(--shadow-color) / 0.6);
+    0 4px 8px rgb(var(--shadow-color) / 0.35),
+    0 24px 48px -16px rgb(var(--shadow-color) / 0.6);
 }
 
 @theme inline {
@@ -180,6 +193,7 @@
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
+  --color-subtle-foreground: var(--subtle-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-success: var(--success);
@@ -204,6 +218,8 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-grid-line: var(--grid-line);
+  --color-ink-panel: var(--ink-panel);
+  --color-ink-panel-foreground: var(--ink-panel-foreground);
 
   --font-sans: var(--font-sans);
   --font-serif: var(--font-serif);
@@ -212,8 +228,8 @@
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --radius-2xl: calc(var(--radius) + 10px);
+  --radius-xl: calc(var(--radius) + 2px);
+  --radius-2xl: calc(var(--radius) + 6px);
 
   --shadow-xs: var(--shadow-xs);
   --shadow-sm: var(--shadow-sm);
@@ -227,6 +243,8 @@
   }
   body {
     @apply bg-background text-foreground font-sans;
+    font-size: 14px;
+    line-height: 1.6;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
     /* Native app feel: no blue tap flash, no iOS text inflation on rotate. */
@@ -234,12 +252,20 @@
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
   }
+  /* Headings are the only serif text; tightened as they grow. */
+  h1,
+  h2 {
+    letter-spacing: -0.015em;
+  }
+  ::selection {
+    background: color-mix(in oklab, var(--brand) 22%, transparent);
+  }
   /* Only animate colour when the theme flips, and never for motion-sensitive users. */
   html.theme-transition * {
     transition:
-      background-color 220ms ease,
-      border-color 220ms ease,
-      color 220ms ease;
+      background-color 200ms ease,
+      border-color 200ms ease,
+      color 200ms ease;
   }
   @media (prefers-reduced-motion: reduce) {
     html.theme-transition * {
@@ -256,6 +282,20 @@
 }
 
 @layer utilities {
+  /*
+   * Clerk paints its footer plinth with its own `!important` rules, injected
+   * after the Tailwind sheet — so an equally-important utility class loses on
+   * order. These compound selectors outrank it on specificity instead.
+   */
+  .cl-cardBox .cl-footer,
+  .cl-cardBox .cl-footer > div,
+  .cl-cardBox .cl-footerItem,
+  .cl-cardBox [data-clerk-dev-mode-overlay] {
+    background: transparent !important;
+    box-shadow: none !important;
+    border-color: var(--border) !important;
+  }
+
   .spin {
     animation: spin 0.9s linear infinite;
   }
@@ -285,47 +325,53 @@
     overscroll-behavior: contain;
   }
 
-  /* Faint engineering grid, used behind hero surfaces. */
-  .bg-grid {
-    background-image:
-      linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
-      linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
-    background-size: 48px 48px;
+  /* Structural label: column heads and section eyebrows. */
+  .label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    line-height: 1.4;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
   }
 
-  /* Hairline top highlight — makes raised cards read as physical. */
-  .surface-raised {
+  /* Panel: a hairline box on paper. No shadow, no gradient, no tint. */
+  .panel {
     background-color: var(--card);
-    box-shadow:
-      inset 0 1px 0 0 rgb(255 255 255 / 0.6),
-      var(--shadow-sm);
-  }
-  .dark .surface-raised {
-    box-shadow:
-      inset 0 1px 0 0 rgb(255 255 255 / 0.04),
-      var(--shadow-sm);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) + 2px);
   }
 
-  /* Staggered entrance for canvas sections. */
-  .stagger > * {
-    animation: canvas-rise 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  /* Row: list item that reveals its affordance on hover. */
+  .row-hover {
+    transition:
+      background-color 150ms ease,
+      border-color 150ms ease;
   }
-  .stagger > *:nth-child(1) { animation-delay: 0ms; }
-  .stagger > *:nth-child(2) { animation-delay: 45ms; }
-  .stagger > *:nth-child(3) { animation-delay: 90ms; }
-  .stagger > *:nth-child(4) { animation-delay: 135ms; }
-  .stagger > *:nth-child(5) { animation-delay: 180ms; }
-  .stagger > *:nth-child(6) { animation-delay: 225ms; }
-  .stagger > *:nth-child(n + 7) { animation-delay: 270ms; }
+  .row-hover:hover {
+    background-color: var(--muted);
+  }
 
-  @keyframes canvas-rise {
+  /* Content entrance. One fade for a whole view, never per card. */
+  .view-enter {
+    animation: view-fade 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  @keyframes view-fade {
     from {
       opacity: 0;
-      transform: translateY(10px);
+      transform: translateY(4px);
     }
     to {
       opacity: 1;
       transform: none;
     }
+  }
+
+  /* Hairline grid, only behind the marketing hero. */
+  .bg-grid {
+    background-image:
+      linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+    background-size: 64px 64px;
   }
 }

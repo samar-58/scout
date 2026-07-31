@@ -1,9 +1,12 @@
+import inspect
 import json
 import os
 import re
 import threading
 import time
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import contextmanager
+from contextvars import ContextVar
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Annotated, Any, TypedDict
 
@@ -68,11 +71,28 @@ def _merge_dict_updates(left: dict, right: dict) -> dict:
     return {**left, **right}
 
 
+STREAM_WRITER_OVERRIDE: ContextVar[Callable[[dict[str, Any]], None] | None] = (
+    ContextVar("scout_stream_writer_override", default=None)
+)
+
+
 def _stream_writer() -> Callable[[dict[str, Any]], None]:
+    override = STREAM_WRITER_OVERRIDE.get()
+    if override is not None:
+        return override
     try:
         return get_stream_writer()
     except RuntimeError:
         return lambda _event: None
+
+
+@contextmanager
+def capture_startup_events(writer: Callable[[dict[str, Any]], None]):
+    token = STREAM_WRITER_OVERRIDE.set(writer)
+    try:
+        yield
+    finally:
+        STREAM_WRITER_OVERRIDE.reset(token)
 
 
 def _public_error(exc: Exception) -> str:
@@ -406,6 +426,64 @@ def _startup_context(state: StartupStressTestState) -> str:
         f"Business model: {state.get('business_model') or 'Not provided'}",
     ]
     return "\n".join(fields)
+
+
+def _hydrate_v2_state(payload: dict[str, Any] | None) -> StartupStressTestV2State:
+    """Restore JSON checkpoint values to the model types used by graph nodes."""
+    if not payload:
+        return {}
+    hydrated: dict[str, Any] = dict(payload)
+    sections = hydrated.get("evidence_sections")
+    if isinstance(sections, dict):
+        hydrated["evidence_sections"] = {
+            int(index): str(value) for index, value in sections.items()
+        }
+    sources = hydrated.get("sources")
+    if isinstance(sources, list):
+        hydrated["sources"] = [Source.model_validate(source) for source in sources]
+    outputs = hydrated.get("agent_outputs")
+    if isinstance(outputs, dict):
+        hydrated["agent_outputs"] = {
+            str(name): AgentInsight.model_validate(output)
+            for name, output in outputs.items()
+        }
+    report = hydrated.get("final_report")
+    if report is not None:
+        hydrated["final_report"] = StartupStressTestV2Response.model_validate(report)
+    return hydrated
+
+
+def _json_checkpoint_value(value: Any) -> Any:
+    if isinstance(value, BaseModel):
+        return value.model_dump(mode="json")
+    if isinstance(value, dict):
+        return {str(key): _json_checkpoint_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_checkpoint_value(item) for item in value]
+    return value
+
+
+def _checkpoint_v2_state(state: StartupStressTestV2State) -> dict[str, Any]:
+    """Persist reusable research state; completed reports have separate storage."""
+    return {
+        key: _json_checkpoint_value(value)
+        for key, value in state.items()
+        if key != "final_report"
+    }
+
+
+def _merge_v2_state_update(
+    state: StartupStressTestV2State,
+    update: dict[str, Any],
+) -> None:
+    for key, value in update.items():
+        if key == "agent_outputs" and isinstance(value, dict):
+            state["agent_outputs"] = _merge_dict_updates(
+                state.get("agent_outputs", {}),
+                value,
+            )
+        else:
+            state[key] = value
 
 
 def _startup_context_v2(state: StartupStressTestV2State) -> str:
@@ -747,6 +825,30 @@ def _merge_agent_outputs(
     return {"agent_outputs": {name: output}}
 
 
+def _restored_agent_update(
+    state: StartupStressTestV2State,
+    agent_name: str,
+) -> StartupStressTestV2State | None:
+    existing = state.get("agent_outputs", {}).get(agent_name)
+    if existing is None:
+        return None
+    display_name = AGENT_DISPLAY_NAMES[agent_name]
+    _stream_writer()(
+        {
+            "type": "agent_status",
+            "agent": agent_name,
+            "display_name": display_name,
+            "status": "completed",
+            "message": f"{display_name} restored from the saved checkpoint.",
+            "summary": existing.summary,
+            "findings": existing.findings[:5],
+            "dimension_scores": _model_dump(existing.dimension_scores),
+            "restored": True,
+        }
+    )
+    return {"agent_outputs": {agent_name: existing}}
+
+
 STRICT_JSON_SCHEMA_MODELS = {"openai/gpt-oss-20b", "openai/gpt-oss-120b"}
 
 
@@ -861,6 +963,21 @@ def _is_retryable_provider_error(exc: Exception) -> bool:
     )
 
 
+def _is_retryable_structured_error(exc: Exception) -> bool:
+    text = str(exc).lower()
+    return isinstance(exc, (ValueError, TypeError)) or any(
+        marker in text
+        for marker in (
+            "structured response",
+            "tool call validation",
+            "tool_use_failed",
+            "json_validate_failed",
+            "failed to validate json",
+            "valid json",
+        )
+    )
+
+
 def _invoke_with_retry(
     runnable: Any,
     messages: list[Any],
@@ -869,6 +986,7 @@ def _invoke_with_retry(
     agent_name: str | None = None,
     display_name: str | None = None,
     semaphore: threading.BoundedSemaphore | None = None,
+    retry_structured: bool = False,
 ) -> Any:
     lock = semaphore or threading.BoundedSemaphore(1)
     with lock:
@@ -876,10 +994,21 @@ def _invoke_with_retry(
             try:
                 return runnable.invoke(messages)
             except Exception as exc:
-                if attempt >= LLM_MAX_ATTEMPTS or not _is_retryable_provider_error(exc):
+                structured_error = retry_structured and _is_retryable_structured_error(exc)
+                retryable = _is_retryable_provider_error(exc) or structured_error
+                if attempt >= LLM_MAX_ATTEMPTS or not retryable:
                     raise
-                delay = _retry_delay_seconds(exc, attempt)
+                delay = (
+                    min(LLM_RETRY_MAX_SECONDS, 0.25 * attempt)
+                    if structured_error
+                    else _retry_delay_seconds(exc, attempt)
+                )
                 if writer and agent_name and display_name:
+                    reason = (
+                        "returned invalid structured output"
+                        if structured_error
+                        else "hit a temporary provider limit"
+                    )
                     writer(
                         {
                             "type": "agent_status",
@@ -887,8 +1016,8 @@ def _invoke_with_retry(
                             "display_name": display_name,
                             "status": "running",
                             "message": (
-                                f"{display_name} hit a temporary provider limit; "
-                                f"retrying in {delay:.1f}s ({attempt}/{LLM_MAX_ATTEMPTS - 1})."
+                                f"{display_name} {reason}; retrying in {delay:.1f}s "
+                                f"({attempt}/{LLM_MAX_ATTEMPTS - 1})."
                             ),
                         }
                     )
@@ -1379,6 +1508,25 @@ def synthesizer_node(state: StartupStressTestState) -> StartupStressTestState:
 
 def v2_evidence_node(state: StartupStressTestV2State) -> StartupStressTestV2State:
     writer = _stream_writer()
+    if state.get("evidence") and state.get("evidence_sections") and state.get("sources"):
+        for agent_id, display_name in AGENT_DISPLAY_NAMES.items():
+            if agent_id not in state.get("agent_outputs", {}):
+                writer(
+                    {
+                        "type": "agent_status",
+                        "agent": agent_id,
+                        "display_name": display_name,
+                        "status": "queued",
+                        "message": f"{display_name} is queued.",
+                    }
+                )
+        return {
+            "evidence": state["evidence"],
+            "evidence_sections": state["evidence_sections"],
+            "sources": state["sources"],
+            "agent_outputs": {},
+        }
+
     search_payloads = _collect_v2_evidence(state, writer)
     evidence_sections = {
         payload["_search_index"]: _format_search_payloads([payload])
@@ -1403,6 +1551,8 @@ def v2_evidence_node(state: StartupStressTestV2State) -> StartupStressTestV2Stat
 
 
 def market_analyst_node(state: StartupStressTestV2State) -> StartupStressTestV2State:
+    if restored := _restored_agent_update(state, "market_analyst"):
+        return restored
     output = _run_structured_agent(
         state,
         "market_analyst",
@@ -1419,100 +1569,88 @@ def market_analyst_node(state: StartupStressTestV2State) -> StartupStressTestV2S
 
 
 def competitor_analyst_node(state: StartupStressTestV2State) -> StartupStressTestV2State:
-    output = _run_structured_agent(
-        state,
-        "competitor_analyst",
-        (
-            "You are a competitor analyst. Identify direct and adjacent competitors, "
-            "their ICP, pricing, positioning, weaknesses, and openings."
-        ),
-        (
-            "Return competitor_snapshot with specific competitors. Score competition "
-            "from 0-10 where a higher score means the startup has a better competitive "
-            "opening despite alternatives."
-        ),
-    )
+    if restored := _restored_agent_update(state, "competitor_analyst"):
+        return restored
+    output = _run_structured_agent(state, "competitor_analyst", (
+        "You are a competitor analyst. Identify direct and adjacent competitors, "
+        "their ICP, pricing, positioning, weaknesses, and openings."
+    ),
+    (
+        "Return competitor_snapshot with specific competitors. Score competition "
+        "from 0-10 where a higher score means the startup has a better competitive "
+        "opening despite alternatives."
+    ),)
     return _merge_agent_outputs("competitor_analyst", output)
 
 
 def customer_analyst_node(state: StartupStressTestV2State) -> StartupStressTestV2State:
-    output = _run_structured_agent(
-        state,
-        "customer_analyst",
-        (
-            "You are a customer analyst. Extract pain points, switching triggers, "
-            "current workarounds, and evidence from reviews, forums, and communities."
-        ),
-        (
-            "Return customer_pain. Focus on what founders need to know: why users "
-            "would switch, what they currently tolerate, and what pain is urgent."
-        ),
-    )
+    if restored := _restored_agent_update(state, "customer_analyst"):
+        return restored
+    output = _run_structured_agent(state, "customer_analyst", (
+        "You are a customer analyst. Extract pain points, switching triggers, "
+        "current workarounds, and evidence from reviews, forums, and communities."
+    ),
+    (
+        "Return customer_pain. Focus on what founders need to know: why users "
+        "would switch, what they currently tolerate, and what pain is urgent."
+    ),)
     return _merge_agent_outputs("customer_analyst", output)
 
 
 def gtm_agent_node(state: StartupStressTestV2State) -> StartupStressTestV2State:
-    output = _run_structured_agent(
-        state,
-        "gtm_agent",
-        (
-            "You are a GTM strategist for early-stage startups. Design a practical "
-            "first-customer and first-100-customers motion."
-        ),
-        (
-            "Return gtm_strategy. Score distribution and monetization from 0-10. "
-            "Respect provided constraints and pricing hypothesis if present."
-        ),
-    )
+    if restored := _restored_agent_update(state, "gtm_agent"):
+        return restored
+    output = _run_structured_agent(state, "gtm_agent", (
+        "You are a GTM strategist for early-stage startups. Design a practical "
+        "first-customer and first-100-customers motion."
+    ),
+    (
+        "Return gtm_strategy. Score distribution and monetization from 0-10. "
+        "Respect provided constraints and pricing hypothesis if present."
+    ),)
     return _merge_agent_outputs("gtm_agent", output)
 
 
 def vc_partner_node(state: StartupStressTestV2State) -> StartupStressTestV2State:
-    output = _run_structured_agent(
-        state,
-        "vc_partner",
-        (
-            "You are a YC-style startup investor. Be skeptical, direct, and focused "
-            "on wedge, market pull, incumbents, defensibility, and urgency."
-        ),
-        (
-            "Return yc_objections, risks, and opportunities. Ask hard questions like "
-            "why this team, why now, why users switch, and why incumbents do not win."
-        ),
-    )
+    if restored := _restored_agent_update(state, "vc_partner"):
+        return restored
+    output = _run_structured_agent(state, "vc_partner", (
+        "You are a YC-style startup investor. Be skeptical, direct, and focused "
+        "on wedge, market pull, incumbents, defensibility, and urgency."
+    ),
+    (
+        "Return yc_objections, risks, and opportunities. Ask hard questions like "
+        "why this team, why now, why users switch, and why incumbents do not win."
+    ),)
     return _merge_agent_outputs("vc_partner", output)
 
 
 def moat_agent_node(state: StartupStressTestV2State) -> StartupStressTestV2State:
-    output = _run_structured_agent(
-        state,
-        "moat_agent",
-        (
-            "You are a moat analyst. Evaluate realistic defensibility for an early "
-            "startup: data, workflow lock-in, switching costs, distribution, and network effects."
-        ),
-        (
-            "Return moat_analysis and any risks. Be realistic about what moat can "
-            "exist in the first 12-24 months."
-        ),
-    )
+    if restored := _restored_agent_update(state, "moat_agent"):
+        return restored
+    output = _run_structured_agent(state, "moat_agent", (
+        "You are a moat analyst. Evaluate realistic defensibility for an early "
+        "startup: data, workflow lock-in, switching costs, distribution, and network effects."
+    ),
+    (
+        "Return moat_analysis and any risks. Be realistic about what moat can "
+        "exist in the first 12-24 months."
+    ),)
     return _merge_agent_outputs("moat_agent", output)
 
 
 def experiment_agent_node(state: StartupStressTestV2State) -> StartupStressTestV2State:
-    output = _run_structured_agent(
-        state,
-        "experiment_agent",
-        (
-            "You are an experiment designer for founders. Convert uncertainty into "
-            "fast, cheap validation experiments."
-        ),
-        (
-            "Return experiments with goal, method, success criteria, failure criteria, "
-            "time, and cost. Also score execution from 0-10 based on how testable and "
-            "operationally feasible the idea is."
-        ),
-    )
+    if restored := _restored_agent_update(state, "experiment_agent"):
+        return restored
+    output = _run_structured_agent(state, "experiment_agent", (
+        "You are an experiment designer for founders. Convert uncertainty into "
+        "fast, cheap validation experiments."
+    ),
+    (
+        "Return experiments with goal, method, success criteria, failure criteria, "
+        "time, and cost. Also score execution from 0-10 based on how testable and "
+        "operationally feasible the idea is."
+    ),)
     return _merge_agent_outputs("experiment_agent", output)
 
 
@@ -1782,6 +1920,7 @@ def v2_synthesizer_node(state: StartupStressTestV2State) -> StartupStressTestV2S
             writer=writer,
             agent_name="synthesizer",
             display_name="Synthesizer",
+            retry_structured=True,
         )
         synthesis = (
             response
@@ -1859,6 +1998,31 @@ V2_AGENT_STEPS = [
     ("moat_agent", "Moat Agent", moat_agent_node),
     ("experiment_agent", "Experiment Agent", experiment_agent_node),
 ]
+V2_STAGE_NODES = {
+    "evidence": v2_evidence_node,
+    **{agent_id: node for agent_id, _display, node in V2_AGENT_STEPS},
+    "synthesizer": v2_synthesizer_node,
+}
+
+
+def execute_startup_v2_stage(
+    state: dict[str, Any],
+    stage: str,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Execute one graph node for a durable external orchestrator.
+
+    The returned update is JSON-compatible and intentionally remains a delta;
+    persistence merges parallel specialist outputs under a database row lock.
+    """
+    node = V2_STAGE_NODES.get(stage)
+    if node is None:
+        raise ValueError(f"Unknown startup research stage: {stage}")
+
+    events: list[dict[str, Any]] = []
+    hydrated = _hydrate_v2_state(state)
+    with capture_startup_events(events.append):
+        update = node(hydrated)
+    return _json_checkpoint_value(update), events
 
 
 startup_graph_builder = StateGraph(StartupStressTestState)
@@ -1909,31 +2073,56 @@ def run_startup_stress_test_v2(
 
 async def stream_startup_stress_test_v2(
     request: StartupStressTestV2Request,
+    *,
+    resume_state: dict[str, Any] | None = None,
+    checkpoint_callback: (
+        Callable[[dict[str, Any], str], Awaitable[None] | None] | None
+    ) = None,
 ) -> AsyncIterator[dict[str, Any]]:
     run_started_at = time.perf_counter()
+    merged_state: StartupStressTestV2State = {
+        **request.model_dump(),
+        **_hydrate_v2_state(resume_state),
+    }
     yield {
         "type": "run_start",
         "idea": request.idea,
-        "message": "Starting startup stress test v2.",
+        "message": (
+            "Resuming startup stress test from the saved checkpoint."
+            if resume_state
+            else "Starting startup stress test v2."
+        ),
     }
 
     try:
         report: StartupStressTestV2Response | None = None
         async for mode, chunk in startup_graph_v2.astream(
-            request.model_dump(),
+            merged_state,
             stream_mode=["updates", "custom"],
         ):
             if mode == "custom" and isinstance(chunk, dict):
                 yield chunk
                 continue
-            if mode == "updates" and isinstance(chunk, dict):
-                synthesis_update = chunk.get("synthesizer")
-                if isinstance(synthesis_update, dict):
-                    candidate = synthesis_update.get("final_report")
-                    if isinstance(candidate, StartupStressTestV2Response):
-                        report = candidate
-                    elif candidate is not None:
-                        report = StartupStressTestV2Response.model_validate(candidate)
+            if mode != "updates" or not isinstance(chunk, dict):
+                continue
+
+            for stage, update in chunk.items():
+                if not isinstance(update, dict):
+                    continue
+                _merge_v2_state_update(merged_state, update)
+                if checkpoint_callback is not None:
+                    callback_result = checkpoint_callback(
+                        _checkpoint_v2_state(merged_state),
+                        str(stage),
+                    )
+                    if inspect.isawaitable(callback_result):
+                        await callback_result
+
+                candidate = update.get("final_report")
+                if isinstance(candidate, StartupStressTestV2Response):
+                    report = candidate
+                elif candidate is not None:
+                    report = StartupStressTestV2Response.model_validate(candidate)
 
         if report is None:
             raise RuntimeError("The startup stress test completed without a final report.")

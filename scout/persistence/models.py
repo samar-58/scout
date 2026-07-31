@@ -98,6 +98,14 @@ class ResearchRun(TimestampMixin, Base):
     report_payload: Mapped[dict[str, Any] | None] = mapped_column(JSON_VALUE)
     markdown_report: Mapped[str | None] = mapped_column(Text)
     error_message: Mapped[str | None] = mapped_column(Text)
+    checkpoint_payload: Mapped[dict[str, Any] | None] = mapped_column(JSON_VALUE)
+    checkpoint_stage: Mapped[str | None] = mapped_column(String(50))
+    resume_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
@@ -118,8 +126,12 @@ class ResearchRun(TimestampMixin, Base):
 class ReportArtifact(Base):
     __tablename__ = "report_artifacts"
     __table_args__ = (
-        UniqueConstraint("project_id", "version", name="project_version"),
-        UniqueConstraint("run_id", name="run"),
+        UniqueConstraint(
+            "project_id",
+            "version",
+            name="uq_report_artifacts_project_version",
+        ),
+        UniqueConstraint("run_id", name="uq_report_artifacts_run"),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
@@ -153,7 +165,11 @@ class ReportArtifact(Base):
 class StreamEvent(Base):
     __tablename__ = "stream_events"
     __table_args__ = (
-        UniqueConstraint("run_id", "sequence", name="run_sequence"),
+        UniqueConstraint(
+            "run_id",
+            "sequence",
+            name="uq_stream_events_run_sequence",
+        ),
         Index("ix_stream_events_run_sequence", "run_id", "sequence"),
     )
 

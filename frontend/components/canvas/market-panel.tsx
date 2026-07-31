@@ -1,31 +1,25 @@
 "use client";
 
-import { TrendingUp } from "lucide-react";
 import { CanvasSection } from "@/components/canvas/canvas-section";
 import type { ReportMarketAnalysis } from "@/lib/report-types";
 
-const TILE_COLORS = [
-  "var(--chart-1)",
-  "var(--chart-4)",
-  "var(--chart-5)",
-  "var(--chart-3)",
-];
-
-export function MarketPanel({
-  market,
-  index,
-}: {
-  market?: ReportMarketAnalysis;
-  index: number;
-}) {
+/**
+ * Market size and timing.
+ *
+ * The four size figures were tiles, each with its own coloured cap and coloured
+ * label from the chart palette — colour used as decoration, since TAM is not a
+ * different *kind* of thing from SAM. They are now one row of figures, which is
+ * also how they compare best.
+ */
+export function MarketPanel({ market }: { market?: ReportMarketAnalysis }) {
   if (!market) return null;
 
-  const tiles = [
+  const figures = [
     { label: "TAM", caption: "Total addressable", value: market.tam },
     { label: "SAM", caption: "Serviceable", value: market.sam },
     { label: "SOM", caption: "Obtainable", value: market.som },
     { label: "CAGR", caption: "Growth rate", value: market.cagr },
-  ].filter((tile) => tile.value?.trim());
+  ].filter((figure) => figure.value?.trim());
 
   const notes = [
     { label: "Why now", value: market.why_now },
@@ -34,42 +28,27 @@ export function MarketPanel({
 
   const trends = (market.trends ?? []).filter((trend) => trend.trim());
 
-  if (tiles.length === 0 && notes.length === 0 && trends.length === 0) {
+  if (figures.length === 0 && notes.length === 0 && trends.length === 0) {
     return null;
   }
 
   return (
     <CanvasSection
       id="market"
-      index={index}
-      icon={TrendingUp}
       eyebrow="Market"
       title="Size and timing"
       description="Ranges from public sources. Treat them as order-of-magnitude, not precision."
     >
-      {tiles.length > 0 && (
-        <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {tiles.map((tile, position) => (
-            <div
-              key={tile.label}
-              className="relative overflow-hidden rounded-xl border border-border bg-background p-4"
-            >
-              <span
-                aria-hidden="true"
-                className="absolute inset-x-0 top-0 h-0.5"
-                style={{ backgroundColor: TILE_COLORS[position % TILE_COLORS.length] }}
-              />
-              <dt
-                className="font-mono text-[10px] tracking-[0.14em] uppercase"
-                style={{ color: TILE_COLORS[position % TILE_COLORS.length] }}
-              >
-                {tile.label}
-              </dt>
-              <dd className="mt-2 font-serif text-[1.15rem] leading-tight font-semibold text-foreground [overflow-wrap:anywhere]">
-                {tile.value}
+      {figures.length > 0 && (
+        <dl className="grid grid-cols-2 gap-x-8 gap-y-5 border-b border-border pb-5 lg:grid-cols-4">
+          {figures.map((figure) => (
+            <div key={figure.label} className="min-w-0">
+              <dt className="label">{figure.label}</dt>
+              <dd className="mt-1.5 font-serif text-[1.35rem] leading-tight font-semibold [overflow-wrap:anywhere]">
+                {figure.value}
               </dd>
-              <dd className="mt-1 text-[11px] text-muted-foreground">
-                {tile.caption}
+              <dd className="mt-1 text-[12px] text-muted-foreground">
+                {figure.caption}
               </dd>
             </div>
           ))}
@@ -77,29 +56,24 @@ export function MarketPanel({
       )}
 
       {trends.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-2">
+        <ul className="mt-5 grid gap-x-8 gap-y-1.5 sm:grid-cols-2">
           {trends.map((trend) => (
-            <span
+            <li
               key={trend}
-              className="rounded-full border border-border bg-background px-3 py-1.5 text-[12.5px] leading-snug text-foreground/80"
+              className="text-[13px] leading-relaxed text-foreground/80"
             >
               {trend}
-            </span>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
 
       {notes.length > 0 && (
-        <dl className="mt-3 grid gap-3 lg:grid-cols-2">
+        <dl className="mt-6 grid gap-x-10 gap-y-4 lg:grid-cols-2">
           {notes.map((note) => (
-            <div
-              key={note.label}
-              className="rounded-xl border border-border bg-surface-sunken/70 p-4"
-            >
-              <dt className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
-                {note.label}
-              </dt>
-              <dd className="mt-2 text-[13px] leading-relaxed text-foreground/80">
+            <div key={note.label}>
+              <dt className="text-[12.5px] text-muted-foreground">{note.label}</dt>
+              <dd className="mt-1 text-[13px] leading-relaxed text-foreground/85">
                 {note.value}
               </dd>
             </div>

@@ -1,9 +1,10 @@
 import os
 
-from dotenv import load_dotenv
 from langchain_groq import ChatGroq
 
-load_dotenv()
+from scout.core.config import load_environment
+
+load_environment()
 
 
 if not os.getenv("GROQ_API_KEY"):

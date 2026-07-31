@@ -1,63 +1,47 @@
 "use client";
 
-import { Compass } from "lucide-react";
 import { CanvasSection } from "@/components/canvas/canvas-section";
 import type { ThesisCard } from "@/lib/report-canvas";
 
 /**
- * The spine of the canvas: six short statements that define the business.
- * Origin badges keep Scout honest — "you" means the founder asserted it in the
- * composer, "scout" means it was inferred from research because the field was
- * left blank.
+ * The spine of the canvas: short statements that define the business, as a
+ * definition list.
+ *
+ * These were cards with hover lift, an accent edge that appeared on hover, and a
+ * pill marking provenance. A term-and-value list says the same thing and lets
+ * the eye run down the labels; provenance is one quiet word after the value.
  */
-export function ThesisGrid({
-  cards,
-  index,
-}: {
-  cards: ThesisCard[];
-  index: number;
-}) {
+export function ThesisGrid({ cards }: { cards: ThesisCard[] }) {
   if (cards.length === 0) return null;
 
   return (
     <CanvasSection
       id="thesis"
-      index={index}
-      icon={Compass}
-      eyebrow="Startup thesis"
+      eyebrow="Thesis"
       title="What we are betting on"
       description="Asserted by you, backfilled by Scout where the composer was blank."
     >
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <dl className="grid gap-x-10 sm:grid-cols-2">
         {cards.map((card) => (
-          <article
+          <div
             key={card.key}
-            className="group relative overflow-hidden rounded-xl border border-border bg-background p-4 transition-all hover:-translate-y-0.5 hover:border-brand/40 hover:shadow-md"
+            className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-baseline gap-3 border-b border-border py-3"
           >
-            <span
-              aria-hidden="true"
-              className="absolute inset-y-0 left-0 w-0.5 bg-brand opacity-0 transition-opacity group-hover:opacity-100"
-            />
-            <div className="flex items-center justify-between gap-2">
-              <h4 className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
-                {card.label}
-              </h4>
-              <span
-                className={
-                  card.origin === "founder"
-                    ? "rounded-full border border-border-strong px-1.5 py-0.5 font-mono text-[9px] tracking-wide text-foreground/60 uppercase"
-                    : "rounded-full border border-brand/30 bg-brand-muted px-1.5 py-0.5 font-mono text-[9px] tracking-wide text-brand uppercase"
-                }
-              >
-                {card.origin === "founder" ? "You" : "Scout"}
-              </span>
-            </div>
-            <p className="mt-2.5 text-[13.5px] leading-relaxed text-foreground/85 [overflow-wrap:anywhere]">
+            <dt className="text-[12.5px] text-muted-foreground">{card.label}</dt>
+            <dd className="min-w-0 text-[13px] leading-relaxed [overflow-wrap:anywhere]">
               {card.value}
-            </p>
-          </article>
+              {card.origin === "scout" && (
+                <span
+                  className="ml-1.5 text-[11.5px] text-subtle-foreground"
+                  title="Inferred by Scout because this field was left blank"
+                >
+                  inferred
+                </span>
+              )}
+            </dd>
+          </div>
         ))}
-      </div>
+      </dl>
     </CanvasSection>
   );
 }

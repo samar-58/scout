@@ -1,16 +1,5 @@
 "use client";
 
-import {
-  Compass,
-  Crosshair,
-  FlaskConical,
-  Link2,
-  NotebookPen,
-  Route,
-  Scale,
-  ShieldQuestion,
-  TrendingUp,
-} from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { AnalystNotes } from "@/components/canvas/analyst-notes";
 import { AssumptionBoard } from "@/components/canvas/assumption-board";
@@ -34,16 +23,15 @@ import type { Source, StartupPayload } from "@/lib/types";
 function scrollToId(id: string) {
   const target = document.getElementById(id);
   if (!target) return;
-  const top = target.getBoundingClientRect().top + window.scrollY - 84;
+  const top = target.getBoundingClientRect().top + window.scrollY - 76;
   window.scrollTo({ top, behavior: "smooth" });
 }
 
 /**
- * The canvas is the only view of a finished run. The Markdown report is no
- * longer rendered — reading a document was the least useful thing a founder
- * could do with this data — but it is still produced by the backend and stays
- * available through Copy and Download in the header, and every narrative part
- * of it (score explanation, per-agent notes) is surfaced as a panel here.
+ * The canvas is the only view of a finished run. The Markdown report is still
+ * produced by the backend and stays available through Copy and Download, and
+ * every narrative part of it (score explanation, per-agent notes) is surfaced as
+ * a section here.
  *
  * Assumption and experiment statuses are deliberately local component state.
  * Nothing is persisted yet, so the UI says so rather than implying a save.
@@ -103,34 +91,29 @@ export function StartupCanvas({
     model.evidence.unknown.length;
 
   /*
-   * Section numbering has to follow what is actually rendered, so the rail and
-   * the chapter numbers are derived from one ordered list instead of being
-   * hardcoded twice.
+   * The rail and the page are derived from one ordered list, so a section can
+   * never appear in the contents without rendering, or the reverse.
    */
-  const sections: (RailItem & { render: (index: number) => React.ReactNode })[] =
-    [];
+  const sections: (RailItem & { render: () => React.ReactNode })[] = [];
 
   if (model.thesis.length > 0) {
     sections.push({
       id: "thesis",
       label: "Thesis",
-      icon: Compass,
       count: model.thesis.length,
-      render: (index) => <ThesisGrid cards={model.thesis} index={index} />,
+      render: () => <ThesisGrid cards={model.thesis} />,
     });
   }
   if (model.assumptions.length > 0) {
     sections.push({
       id: "assumptions",
       label: "Assumptions",
-      icon: ShieldQuestion,
       count: model.assumptions.length,
-      render: (index) => (
+      render: () => (
         <AssumptionBoard
           assumptions={model.assumptions}
           experiments={model.experiments}
           statuses={assumptionStatuses}
-          index={index}
           onStatusChange={setAssumptionStatus}
           onOpenExperiment={openExperiment}
         />
@@ -141,14 +124,12 @@ export function StartupCanvas({
     sections.push({
       id: "experiments",
       label: "Experiments",
-      icon: FlaskConical,
       count: model.experiments.length,
-      render: (index) => (
+      render: () => (
         <ExperimentBoard
           experiments={model.experiments}
           statuses={experimentStatuses}
           focusedId={focusedExperiment}
-          index={index}
           onStatusChange={setExperimentStatus}
         />
       ),
@@ -158,45 +139,31 @@ export function StartupCanvas({
     sections.push({
       id: "evidence",
       label: "Evidence",
-      icon: Scale,
       count: evidenceCount,
-      render: (index) => (
-        <EvidenceBoard evidence={model.evidence} index={index} />
-      ),
+      render: () => <EvidenceBoard evidence={model.evidence} />,
     });
   }
   if (hasMarket) {
     sections.push({
       id: "market",
       label: "Market",
-      icon: TrendingUp,
-      render: (index) => (
-        <MarketPanel market={report.market_analysis} index={index} />
-      ),
+      render: () => <MarketPanel market={report.market_analysis} />,
     });
   }
   if (competitors.length > 0) {
     sections.push({
       id: "competitors",
       label: "Competitors",
-      icon: Crosshair,
       count: competitors.length,
-      render: (index) => (
-        <CompetitorBoard competitors={competitors} index={index} />
-      ),
+      render: () => <CompetitorBoard competitors={competitors} />,
     });
   }
   if (hasMoat) {
     sections.push({
       id: "moat",
       label: "Moat & GTM",
-      icon: Route,
-      render: (index) => (
-        <MoatGtmPanel
-          moat={report.moat_analysis}
-          gtm={report.gtm_strategy}
-          index={index}
-        />
+      render: () => (
+        <MoatGtmPanel moat={report.moat_analysis} gtm={report.gtm_strategy} />
       ),
     });
   }
@@ -204,32 +171,26 @@ export function StartupCanvas({
     sections.push({
       id: "notes",
       label: "Analyst notes",
-      icon: NotebookPen,
       count: model.analystNotes.length,
-      render: (index) => (
-        <AnalystNotes notes={model.analystNotes} index={index} />
-      ),
+      render: () => <AnalystNotes notes={model.analystNotes} />,
     });
   }
   if (reportSources.length > 0) {
     sections.push({
       id: "sources",
       label: "Sources",
-      icon: Link2,
       count: reportSources.length,
-      render: (index) => (
-        <SourcesPanel sources={reportSources} index={index} />
-      ),
+      render: () => <SourcesPanel sources={reportSources} />,
     });
   }
 
   const railItems: RailItem[] = sections.map(({ render: _render, ...item }) => item);
 
   return (
-    <div className="grid items-start gap-5 xl:grid-cols-[188px_minmax(0,1fr)] xl:gap-7">
+    <div className="grid items-start gap-6 xl:grid-cols-[164px_minmax(0,1fr)] xl:gap-10">
       <CanvasRail items={railItems} onNavigate={scrollToId} />
 
-      <div className="stagger min-w-0 space-y-4 sm:space-y-5">
+      <div className="min-w-0 space-y-7">
         <VerdictHero
           decision={model.decision}
           dimensions={model.dimensions}
@@ -241,24 +202,18 @@ export function StartupCanvas({
           }
         />
 
-        {markdown && (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3 shadow-xs">
-            <p className="text-[12.5px] leading-relaxed text-muted-foreground">
-              Need the long-form write-up? It is still generated — take it as
-              Markdown.
-            </p>
-            <ReportToolbar markdown={markdown} />
-          </div>
-        )}
-
-        {sections.map((section, position) => (
-          <div key={section.id}>{section.render(position + 1)}</div>
+        {sections.map((section) => (
+          <div key={section.id}>{section.render()}</div>
         ))}
 
-        <p className="px-1 pb-2 text-[11.5px] leading-relaxed text-muted-foreground">
-          Statuses you set here are not saved yet — they live in this browser tab
-          only and reset when the run ends.
-        </p>
+        <footer className="flex flex-wrap items-center justify-between gap-4 border-t border-border pt-5">
+          <p className="max-w-xl text-[12px] leading-relaxed text-muted-foreground">
+            Statuses you set on assumptions and experiments live in this browser
+            tab only — they are not saved yet.
+            {markdown && " The long-form write-up is still generated:"}
+          </p>
+          {markdown && <ReportToolbar markdown={markdown} />}
+        </footer>
       </div>
     </div>
   );

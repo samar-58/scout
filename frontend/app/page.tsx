@@ -1,22 +1,9 @@
 import { UserButton } from "@clerk/nextjs";
 import { auth } from "@clerk/nextjs/server";
-import {
-  ArrowRight,
-  CircleHelp,
-  FileText,
-  FlaskConical,
-  Gauge,
-  Link2,
-  MinusCircle,
-  PenLine,
-  PlusCircle,
-  Radar,
-  ShieldQuestion,
-} from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { CanvasPreview } from "@/components/landing/canvas-preview";
-import { SectionHeading } from "@/components/landing/section-heading";
-import { ScoutLogo, ScoutMark } from "@/components/scout-logo";
+import { ScoutMark } from "@/components/scout-logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { AGENT_LIST } from "@/lib/agent-meta";
@@ -24,90 +11,52 @@ import { AGENT_LIST } from "@/lib/agent-meta";
 const NAV_LINKS = [
   { href: "#how-it-works", label: "How it works" },
   { href: "#workspace", label: "Workspace" },
-  { href: "#the-team", label: "The team" },
-];
-
-const STATS = [
-  { value: "8", label: "live web searches" },
-  { value: "7", label: "specialist agents" },
-  { value: "6", label: "scored dimensions" },
-  { value: "0", label: "uncited claims" },
+  { href: "#team", label: "Specialists" },
 ];
 
 const STEPS = [
   {
-    icon: PenLine,
     title: "Describe the idea",
     body: "One line is enough. Add customer, pricing, or stage and the research sharpens.",
   },
   {
-    icon: Radar,
     title: "Watch the research run",
-    body: "Eight searches and seven specialists work in parallel, in the open, with every query visible.",
+    body: "Eight searches and seven specialists work in parallel, with every query visible.",
   },
   {
-    icon: Gauge,
     title: "Get a recommendation",
-    body: "A scored verdict with confidence — plus what would change it, stated up front.",
+    body: "A scored verdict with confidence — and the conditions that would change it.",
   },
   {
-    icon: FlaskConical,
     title: "Leave with experiments",
-    body: "Your riskiest assumptions, each paired with a cheap test that has a success and failure line.",
+    body: "Your riskiest assumptions, each paired with a cheap test that has a failure line.",
   },
 ];
 
-const WORKSPACE_FEATURES = [
+const WORKSPACE = [
   {
-    icon: Gauge,
     title: "A decision, not a summary",
-    body: "Proceed, narrow, investigate, or reconsider — with the score, the confidence, and the conditions that would move it.",
-    span: "lg:col-span-3",
+    body: "Proceed, narrow, investigate, or reconsider — with the score, the confidence, and what would move it.",
   },
   {
-    icon: ShieldQuestion,
     title: "The assumptions still open",
-    body: "Risks and investor objections become cards you set a status on: untested, testing, supported, contradicted.",
-    span: "lg:col-span-3",
+    body: "Risks and investor objections become rows you set a status on as you learn.",
   },
   {
-    icon: FlaskConical,
     title: "Experiments with a failure line",
-    body: "Every test states what success looks like and what would kill it, so the result is a decision rather than a vibe.",
-    span: "lg:col-span-2",
+    body: "Every test states what success looks like and what would kill it.",
   },
   {
-    icon: Link2,
-    title: "Assumptions linked to tests",
-    body: "Each open question points at the experiment most likely to settle it.",
-    span: "lg:col-span-2",
+    title: "Evidence, sorted by direction",
+    body: "What supports the idea, what cuts against it, and what nobody can answer yet.",
   },
   {
-    icon: FileText,
-    title: "The full report, still there",
-    body: "The written report stays one tab away, ready to copy or download as Markdown.",
-    span: "lg:col-span-2",
-  },
-];
-
-const EVIDENCE_COLUMNS = [
-  {
-    icon: PlusCircle,
-    tone: "text-success",
-    title: "Supports the idea",
-    items: ["Cloud ledger adoption is accelerating", "Staffing shortages at small firms"],
+    title: "Every claim cited",
+    body: "Deduplicated sources you can open, and the Markdown report if you want the long form.",
   },
   {
-    icon: MinusCircle,
-    tone: "text-destructive",
-    title: "Cuts against it",
-    items: ["Accountants are liable for errors", "Sales cycles run three to six months"],
-  },
-  {
-    icon: CircleHelp,
-    tone: "text-warning",
-    title: "Still unknown",
-    items: ["Whether firms will trust AI on client books", "What they actually pay today"],
+    title: "Runs that resume",
+    body: "Completed stages are checkpointed, so a failed run picks up instead of starting over.",
   },
 ];
 
@@ -122,38 +71,49 @@ export default async function LandingPage() {
   const { userId } = await auth();
 
   return (
-    <div className="min-h-screen">
-      <header className="sticky top-4 z-30 px-4">
-        <nav className="mx-auto flex h-14 max-w-3xl items-center justify-between gap-4 rounded-full border border-border bg-background/80 py-2 pr-2 pl-5 shadow-sm backdrop-blur-md">
-          <Link href="/" aria-label="Scout home" className="shrink-0">
-            <ScoutLogo markSize={14} />
+    <div className="min-h-dvh">
+      <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur-md">
+        <nav className="mx-auto flex h-14 max-w-[68rem] items-center gap-6 px-5 sm:px-6">
+          <Link href="/" aria-label="Scout home" className="flex items-center gap-2">
+            <span className="grid size-7 place-items-center rounded-md bg-foreground text-background">
+              <ScoutMark size={15} />
+            </span>
+            <span className="font-serif text-[15px] font-semibold">Scout</span>
           </Link>
-          <div className="hidden items-center gap-1 md:flex">
+
+          <div className="hidden items-center gap-5 md:flex">
             {NAV_LINKS.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
-                className="rounded-full px-3 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className="text-[13px] text-muted-foreground transition-colors hover:text-foreground"
               >
                 {link.label}
               </Link>
             ))}
           </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <ThemeToggle className="hidden sm:inline-flex" />
+
+          <div className="ml-auto flex items-center gap-2">
+            <ThemeToggle />
             {userId ? (
               <>
-                <Button asChild size="sm" className="rounded-full">
-                  <Link href="/app">
-                    Open Scout <ArrowRight size={14} />
-                  </Link>
+                <Button asChild size="sm" variant="ghost">
+                  <Link href="/projects">Projects</Link>
                 </Button>
-                <UserButton appearance={{ elements: { avatarBox: "h-8 w-8" } }} />
+                <Button asChild size="sm">
+                  <Link href="/app">Open Scout</Link>
+                </Button>
+                <UserButton appearance={{ elements: { avatarBox: "h-7 w-7" } }} />
               </>
             ) : (
-              <Button asChild size="sm" variant="outline" className="rounded-full">
-                <Link href="/sign-in">Sign in</Link>
-              </Button>
+              <>
+                <Button asChild size="sm" variant="ghost">
+                  <Link href="/sign-in">Sign in</Link>
+                </Button>
+                <Button asChild size="sm">
+                  <Link href="/sign-up">Start free</Link>
+                </Button>
+              </>
             )}
           </div>
         </nav>
@@ -164,128 +124,105 @@ export default async function LandingPage() {
         <section className="relative overflow-hidden border-b border-border">
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-0 -z-10"
-            style={{
-              backgroundImage:
-                "linear-gradient(to right, var(--border) 1px, transparent 1px), linear-gradient(to bottom, var(--border) 1px, transparent 1px)",
-              backgroundSize: "56px 56px",
-              maskImage:
-                "radial-gradient(ellipse 80% 55% at 50% 0%, #000 30%, transparent 100%)",
-              WebkitMaskImage:
-                "radial-gradient(ellipse 80% 55% at 50% 0%, #000 30%, transparent 100%)",
-            }}
+            className="bg-grid pointer-events-none absolute inset-0 -z-10 opacity-60 [mask-image:radial-gradient(ellipse_70%_50%_at_50%_0%,#000_20%,transparent_100%)]"
           />
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[460px]"
-            style={{
-              background:
-                "radial-gradient(50% 55% at 50% 0%, color-mix(in oklab, var(--brand) 12%, transparent), transparent 72%)",
-            }}
-          />
-
-          <div className="mx-auto grid max-w-6xl items-center gap-12 px-6 pt-24 pb-16 sm:pt-28 lg:grid-cols-[minmax(0,1fr)_minmax(0,440px)] lg:gap-14 lg:pb-24">
-            <div className="max-w-xl duration-700 animate-in fade-in slide-in-from-bottom-3">
-              <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card/80 px-3 py-1 text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase backdrop-blur">
-                <ScoutMark size={13} className="text-brand" />
-                Multi-agent research
-              </span>
-              <h1 className="mt-7 font-serif text-[2.5rem] leading-[1.05] font-semibold tracking-tight text-balance sm:text-[3.5rem]">
-                Find out what would{" "}
-                <span className="text-brand">kill your idea</span> — before you
-                build it.
+          <div className="mx-auto grid max-w-[68rem] items-center gap-12 px-5 pt-16 pb-14 sm:px-6 sm:pt-24 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] lg:gap-16 lg:pb-20">
+            <div className="max-w-xl">
+              <p className="label">Multi-agent startup research</p>
+              <h1 className="mt-5 font-serif text-[2.25rem] leading-[1.05] font-semibold text-balance sm:text-[3rem]">
+                Find out what would kill your idea — before you build it.
               </h1>
-              <p className="mt-6 text-base leading-relaxed text-muted-foreground sm:text-lg">
+              <p className="mt-5 text-[15px] leading-relaxed text-muted-foreground">
                 Scout runs seven specialist agents over live web research, then
                 hands you a scored recommendation, the assumptions it could not
                 settle, and the cheapest experiments that would.
               </p>
-              <div className="mt-9 flex flex-col gap-3 sm:flex-row">
-                <Button asChild size="lg" className="gap-2">
+              <div className="mt-8 flex flex-wrap items-center gap-3">
+                <Button asChild className="gap-1.5">
                   <Link href="/app">
-                    Stress-test an idea <ArrowRight size={16} />
+                    Stress-test an idea <ArrowRight size={14} />
                   </Link>
                 </Button>
-                <Button asChild size="lg" variant="outline">
-                  <Link href="#workspace">See what you get</Link>
-                </Button>
+                <Link
+                  href="#workspace"
+                  className="text-[13px] text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
+                >
+                  See what you get
+                </Link>
               </div>
-              <p className="mt-6 font-mono text-xs tracking-tight text-muted-foreground">
-                Free account · Every claim cited · Projects saved
+              <p className="mt-6 text-[12.5px] text-subtle-foreground">
+                Free account · every claim cited · projects saved
               </p>
             </div>
 
-            <div className="delay-150 duration-1000 animate-in fade-in slide-in-from-bottom-6">
-              <CanvasPreview />
-            </div>
+            <CanvasPreview />
           </div>
         </section>
 
-        {/* Stat strip */}
-        <section className="border-b border-border bg-secondary/40">
-          <dl className="mx-auto grid max-w-6xl grid-cols-2 gap-px bg-border px-6 sm:grid-cols-4">
-            {STATS.map((stat) => (
-              <div
-                key={stat.label}
-                className="bg-background px-4 py-7 text-center sm:py-8"
-              >
-                <dt className="sr-only">{stat.label}</dt>
-                <dd>
-                  <span className="block font-serif text-3xl font-semibold tabular-nums">
-                    {stat.value}
-                  </span>
-                  <span className="mt-1.5 block text-[12px] tracking-wide text-muted-foreground">
-                    {stat.label}
-                  </span>
+        {/* Numbers */}
+        <section className="border-b border-border">
+          <dl className="mx-auto flex max-w-[68rem] flex-wrap gap-x-12 gap-y-6 px-5 py-8 sm:px-6">
+            {[
+              { value: "8", label: "live web searches" },
+              { value: "7", label: "specialist agents" },
+              { value: "6", label: "scored dimensions" },
+              { value: "0", label: "uncited claims" },
+            ].map((stat) => (
+              <div key={stat.label} className="flex items-baseline gap-2">
+                <dd className="font-serif text-2xl font-semibold tabular-nums">
+                  {stat.value}
                 </dd>
+                <dt className="text-[13px] text-muted-foreground">{stat.label}</dt>
               </div>
             ))}
           </dl>
         </section>
 
-        {/* The shift: report vs canvas */}
-        <section className="mx-auto max-w-6xl px-6 py-20 sm:py-24">
-          <SectionHeading
-            eyebrow="Why Scout is different"
-            title="Most idea validation ends in a document nobody acts on."
-            body="A polished report feels like progress. It is not. Scout ends where the work actually starts — with the questions research cannot answer and a plan to answer them."
-          />
-          <div className="mt-12 grid gap-4 lg:grid-cols-2">
-            <div className="rounded-xl border border-border bg-card p-6">
-              <span className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
+        {/* Positioning */}
+        <section className="mx-auto max-w-[68rem] px-5 py-16 sm:px-6 sm:py-20">
+          <div className="max-w-2xl">
+            <p className="label">Why Scout is different</p>
+            <h2 className="mt-4 font-serif text-[1.65rem] leading-tight font-semibold text-balance sm:text-[2rem]">
+              Most idea validation ends in a document nobody acts on.
+            </h2>
+            <p className="mt-4 leading-relaxed text-muted-foreground">
+              A polished report feels like progress. It is not. Scout ends where
+              the work actually starts — with the questions research cannot answer
+              and a plan to answer them.
+            </p>
+          </div>
+
+          <div className="mt-10 grid gap-x-12 gap-y-8 lg:grid-cols-2">
+            <div>
+              <h3 className="border-b border-border pb-2 text-[13px] font-medium text-muted-foreground">
                 What you usually get
-              </span>
-              <ul className="mt-5 space-y-3.5">
+              </h3>
+              <ul className="divide-y divide-border">
                 {[
                   "Twelve pages of confident prose",
                   "A market size with no source",
                   "A verdict with no conditions attached",
                   "Nothing to do on Monday morning",
                 ].map((item) => (
-                  <li key={item} className="flex gap-3 text-[14px] leading-relaxed">
-                    <MinusCircle
-                      size={15}
-                      className="mt-0.5 shrink-0 text-muted-foreground/50"
-                    />
-                    <span className="text-muted-foreground">{item}</span>
+                  <li key={item} className="py-2.5 text-[13.5px] text-muted-foreground">
+                    {item}
                   </li>
                 ))}
               </ul>
             </div>
-            <div className="rounded-xl border border-brand/30 bg-brand-muted/40 p-6">
-              <span className="font-mono text-[11px] tracking-[0.12em] text-brand uppercase">
+            <div>
+              <h3 className="border-b border-border pb-2 text-[13px] font-medium">
                 What Scout gives you
-              </span>
-              <ul className="mt-5 space-y-3.5">
+              </h3>
+              <ul className="divide-y divide-border">
                 {[
                   "A recommendation with a confidence level",
                   "Every claim traced to a source you can open",
                   "The exact conditions that would change the answer",
                   "Three experiments you can start this week",
                 ].map((item) => (
-                  <li key={item} className="flex gap-3 text-[14px] leading-relaxed">
-                    <PlusCircle size={15} className="mt-0.5 shrink-0 text-brand" />
-                    <span className="text-foreground/85">{item}</span>
+                  <li key={item} className="py-2.5 text-[13.5px]">
+                    {item}
                   </li>
                 ))}
               </ul>
@@ -294,27 +231,20 @@ export default async function LandingPage() {
         </section>
 
         {/* How it works */}
-        <section id="how-it-works" className="border-y border-border bg-secondary/40">
-          <div className="mx-auto max-w-6xl px-6 py-20 sm:py-24">
-            <SectionHeading
-              eyebrow="How it works"
-              title="From a single line to a week of work you can defend."
-            />
-            <ol className="mt-12 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2 lg:grid-cols-4">
+        <section id="how-it-works" className="border-y border-border bg-surface-sunken">
+          <div className="mx-auto max-w-[68rem] px-5 py-16 sm:px-6 sm:py-20">
+            <p className="label">How it works</p>
+            <h2 className="mt-4 max-w-2xl font-serif text-[1.65rem] leading-tight font-semibold text-balance sm:text-[2rem]">
+              From a single line to a week of work you can defend.
+            </h2>
+            <ol className="mt-10 grid gap-x-10 gap-y-7 sm:grid-cols-2 lg:grid-cols-4">
               {STEPS.map((step, index) => (
-                <li key={step.title} className="flex flex-col bg-card p-6">
-                  <div className="flex items-center justify-between">
-                    <span className="grid h-10 w-10 place-items-center rounded-md bg-foreground/[0.05] text-foreground dark:bg-foreground/10">
-                      <step.icon size={18} strokeWidth={1.75} />
-                    </span>
-                    <span className="font-mono text-sm text-muted-foreground/60">
-                      0{index + 1}
-                    </span>
-                  </div>
-                  <h3 className="mt-5 font-serif text-[17px] font-semibold">
-                    {step.title}
-                  </h3>
-                  <p className="mt-2 text-[13.5px] leading-relaxed text-muted-foreground">
+                <li key={step.title} className="border-t border-border pt-4">
+                  <span className="text-[12px] tabular-nums text-subtle-foreground">
+                    {String(index + 1).padStart(2, "0")}
+                  </span>
+                  <h3 className="mt-2 text-[14px] font-medium">{step.title}</h3>
+                  <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
                     {step.body}
                   </p>
                 </li>
@@ -323,142 +253,85 @@ export default async function LandingPage() {
           </div>
         </section>
 
-        {/* Workspace anatomy */}
-        <section id="workspace" className="mx-auto max-w-6xl px-6 py-20 sm:py-24">
-          <SectionHeading
-            eyebrow="The workspace"
-            title="Not a document. A place to decide."
-            body="Every finished run opens as a canvas: the recommendation, the thesis it rests on, what is still unproven, and how to find out."
-          />
-          <div className="mt-12 grid gap-4 lg:grid-cols-6">
-            {WORKSPACE_FEATURES.map((feature) => (
-              <article
-                key={feature.title}
-                className={`group rounded-xl border border-border bg-card p-6 transition-colors hover:border-brand/40 ${feature.span}`}
-              >
-                <span className="grid h-10 w-10 place-items-center rounded-md bg-foreground/[0.05] text-foreground transition-colors group-hover:bg-brand-muted group-hover:text-brand dark:bg-foreground/10">
-                  <feature.icon size={18} strokeWidth={1.75} />
-                </span>
-                <h3 className="mt-4 font-serif text-[17px] font-semibold">
-                  {feature.title}
-                </h3>
-                <p className="mt-2 text-[13.5px] leading-relaxed text-muted-foreground">
+        {/* Workspace */}
+        <section id="workspace" className="mx-auto max-w-[68rem] px-5 py-16 sm:px-6 sm:py-20">
+          <div className="max-w-2xl">
+            <p className="label">The workspace</p>
+            <h2 className="mt-4 font-serif text-[1.65rem] leading-tight font-semibold text-balance sm:text-[2rem]">
+              Not a document. A place to decide.
+            </h2>
+            <p className="mt-4 leading-relaxed text-muted-foreground">
+              Every finished run opens as a canvas: the recommendation, the thesis
+              it rests on, what is still unproven, and how to find out.
+            </p>
+          </div>
+          <div className="mt-10 grid gap-x-10 gap-y-7 sm:grid-cols-2 lg:grid-cols-3">
+            {WORKSPACE.map((feature) => (
+              <article key={feature.title} className="border-t border-border pt-4">
+                <h3 className="text-[14px] font-medium">{feature.title}</h3>
+                <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
                   {feature.body}
                 </p>
               </article>
             ))}
           </div>
-
-          {/* Evidence board illustration */}
-          <div className="mt-4 rounded-xl border border-border bg-card p-6">
-            <div className="flex flex-wrap items-baseline justify-between gap-3">
-              <div>
-                <span className="text-[10px] font-semibold tracking-[0.16em] text-brand uppercase">
-                  Evidence board
-                </span>
-                <h3 className="mt-1 font-serif text-[17px] font-semibold">
-                  Sorted by which way it cuts
-                </h3>
-              </div>
-              <p className="max-w-md text-[13px] leading-relaxed text-muted-foreground">
-                Including the honest gaps. Scout shows you what it could not
-                answer instead of writing around it.
-              </p>
-            </div>
-            <div className="mt-5 grid gap-3 lg:grid-cols-3">
-              {EVIDENCE_COLUMNS.map((column) => (
-                <div
-                  key={column.title}
-                  className="rounded-lg border border-border bg-background p-4"
-                >
-                  <h4
-                    className={`flex items-center gap-1.5 text-[10px] font-semibold tracking-[0.14em] uppercase ${column.tone}`}
-                  >
-                    <column.icon size={13} />
-                    {column.title}
-                  </h4>
-                  <ul className="mt-3 space-y-2">
-                    {column.items.map((item) => (
-                      <li
-                        key={item}
-                        className="text-[12.5px] leading-relaxed text-foreground/75"
-                      >
-                        {item}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          </div>
         </section>
 
-        {/* The team */}
-        <section
-          id="the-team"
-          className="border-y border-border bg-secondary/40"
-        >
-          <div className="mx-auto max-w-6xl px-6 py-20 sm:py-24">
-            <SectionHeading
-              eyebrow="The team"
-              title="Seven specialists, one verdict."
-              body="Each agent owns one dimension, runs its own live research, and defends its own score. When one fails, the rest still report."
-            />
-            <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Specialists */}
+        <section id="team" className="border-y border-border bg-surface-sunken">
+          <div className="mx-auto max-w-[68rem] px-5 py-16 sm:px-6 sm:py-20">
+            <p className="label">The specialists</p>
+            <h2 className="mt-4 max-w-2xl font-serif text-[1.65rem] leading-tight font-semibold text-balance sm:text-[2rem]">
+              Seven analysts, one verdict.
+            </h2>
+            <p className="mt-4 max-w-2xl leading-relaxed text-muted-foreground">
+              Each agent owns one dimension, runs its own live research, and
+              defends its own score. When one fails, the rest still report.
+            </p>
+
+            <dl className="mt-10 grid gap-x-10 sm:grid-cols-2">
               {AGENT_LIST.map((agent) => (
                 <div
                   key={agent.id}
-                  className="group rounded-xl border border-border bg-card p-5 transition-colors hover:border-brand/40"
+                  className="grid grid-cols-[10rem_minmax(0,1fr)] gap-4 border-t border-border py-3.5"
                 >
-                  <span className="grid h-10 w-10 place-items-center rounded-md bg-foreground/[0.05] text-foreground transition-colors group-hover:bg-brand-muted group-hover:text-brand dark:bg-foreground/10">
-                    <agent.icon size={18} strokeWidth={1.75} />
-                  </span>
-                  <h3 className="mt-4 font-serif text-[15px] font-semibold">
-                    {agent.label}
-                  </h3>
-                  <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
+                  <dt className="text-[13.5px] font-medium">{agent.label}</dt>
+                  <dd className="text-[13px] leading-relaxed text-muted-foreground">
                     {agent.blurb}
-                  </p>
+                  </dd>
                 </div>
               ))}
-              <div className="rounded-xl border border-dashed border-border bg-transparent p-5">
-                <span className="grid h-10 w-10 place-items-center rounded-md border border-border text-brand">
-                  <ScoutMark size={17} />
-                </span>
-                <h3 className="mt-4 font-serif text-[15px] font-semibold">
-                  Synthesis
-                </h3>
-                <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
+              <div className="grid grid-cols-[10rem_minmax(0,1fr)] gap-4 border-t border-border py-3.5">
+                <dt className="text-[13.5px] font-medium">Synthesis</dt>
+                <dd className="text-[13px] leading-relaxed text-muted-foreground">
                   Reconciles all seven into one scored recommendation — and owns
                   the disagreements.
-                </p>
+                </dd>
               </div>
-            </div>
+            </dl>
           </div>
         </section>
 
-        {/* Honest limits */}
-        <section className="mx-auto max-w-6xl px-6 py-20 sm:py-24">
-          <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:gap-16">
-            <SectionHeading
-              eyebrow="What Scout will not do"
-              title="The limits are part of the product."
-              body="A tool that tells you what it cannot do is easier to trust with the things it can."
-              className="max-w-none"
-            />
-            <ul className="space-y-px overflow-hidden rounded-xl border border-border bg-border">
+        {/* Limits */}
+        <section className="mx-auto max-w-[68rem] px-5 py-16 sm:px-6 sm:py-20">
+          <div className="grid gap-x-16 gap-y-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+            <div>
+              <p className="label">What Scout will not do</p>
+              <h2 className="mt-4 font-serif text-[1.65rem] leading-tight font-semibold text-balance sm:text-[2rem]">
+                The limits are part of the product.
+              </h2>
+              <p className="mt-4 leading-relaxed text-muted-foreground">
+                A tool that tells you what it cannot do is easier to trust with
+                the things it can.
+              </p>
+            </div>
+            <ul className="divide-y divide-border border-t border-border">
               {LIMITS.map((limit) => {
                 const [lead, ...rest] = limit.split(". ");
                 return (
-                  <li key={limit} className="bg-card px-5 py-4">
-                    <p className="text-[14px] leading-relaxed">
-                      <span className="font-medium text-foreground">
-                        {lead}.
-                      </span>{" "}
-                      <span className="text-muted-foreground">
-                        {rest.join(". ")}
-                      </span>
-                    </p>
+                  <li key={limit} className="py-3.5 text-[13.5px] leading-relaxed">
+                    <span className="font-medium">{lead}.</span>{" "}
+                    <span className="text-muted-foreground">{rest.join(". ")}</span>
                   </li>
                 );
               })}
@@ -466,49 +339,37 @@ export default async function LandingPage() {
           </div>
         </section>
 
-        {/* CTA band */}
-        <section className="relative overflow-hidden border-t border-border bg-foreground text-background">
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0 opacity-[0.07]"
-            style={{
-              backgroundImage:
-                "linear-gradient(to right, currentColor 1px, transparent 1px), linear-gradient(to bottom, currentColor 1px, transparent 1px)",
-              backgroundSize: "48px 48px",
-              maskImage:
-                "radial-gradient(ellipse 70% 70% at 50% 50%, #000 20%, transparent 100%)",
-              WebkitMaskImage:
-                "radial-gradient(ellipse 70% 70% at 50% 50%, #000 20%, transparent 100%)",
-            }}
-          />
-          <div className="mx-auto max-w-4xl px-6 py-20 text-center sm:py-24">
-            <ScoutMark size={28} className="mx-auto text-brand" />
-            <h2 className="mx-auto mt-6 max-w-2xl font-serif text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
-              Stop polishing the pitch. Test the assumption.
-            </h2>
-            <p className="mx-auto mt-4 max-w-lg text-background/70">
-              One line about your idea is enough to start. You will leave with
-              something to run this week.
-            </p>
-            <Button
-              asChild
-              size="lg"
-              className="mt-9 gap-2 bg-background text-foreground hover:bg-background/90"
-            >
-              <Link href="/app">
-                Stress-test an idea <ArrowRight size={16} />
-              </Link>
-            </Button>
+        {/* Close */}
+        <section className="border-t border-border bg-ink-panel text-ink-panel-foreground">
+          <div className="mx-auto max-w-[68rem] px-5 py-16 sm:px-6 sm:py-20">
+            <div className="max-w-xl">
+              <h2 className="font-serif text-[1.75rem] leading-tight font-semibold text-balance sm:text-[2.25rem]">
+                Stop polishing the pitch. Test the assumption.
+              </h2>
+              <p className="mt-4 leading-relaxed opacity-70">
+                One line about your idea is enough to start. You will leave with
+                something to run this week.
+              </p>
+              <Button
+                asChild
+                className="mt-8 gap-1.5 bg-ink-panel-foreground text-ink-panel hover:bg-ink-panel-foreground/90"
+              >
+                <Link href="/app">
+                  Stress-test an idea <ArrowRight size={14} />
+                </Link>
+              </Button>
+            </div>
           </div>
         </section>
       </main>
 
       <footer className="border-t border-border">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-6 py-8 text-sm text-muted-foreground sm:flex-row">
-          <ScoutLogo markSize={12} textClassName="text-base text-foreground" />
-          <span className="font-mono text-xs">
-            Evidence-backed multi-agent startup research
+        <div className="mx-auto flex max-w-[68rem] flex-col items-start justify-between gap-3 px-5 py-7 text-[12.5px] text-muted-foreground sm:flex-row sm:items-center sm:px-6">
+          <span className="flex items-center gap-2">
+            <ScoutMark size={13} />
+            Scout
           </span>
+          <span>Evidence-backed multi-agent startup research</span>
         </div>
       </footer>
     </div>

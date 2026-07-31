@@ -1,9 +1,15 @@
 import { SignUp } from "@clerk/nextjs";
+import { AuthLayout } from "@/components/auth/auth-layout";
+import { embeddedAuthAppearance } from "@/lib/clerk-appearance";
 
 export default function SignUpPage() {
   return (
-    <main className="grid min-h-dvh place-items-center bg-background p-4">
-      <SignUp />
-    </main>
+    <AuthLayout
+      eyebrow="Create an account"
+      title="Start researching"
+      subtitle="Every stress test is saved as a project you can reopen, version, and resume."
+    >
+      <SignUp appearance={embeddedAuthAppearance} />
+    </AuthLayout>
   );
 }

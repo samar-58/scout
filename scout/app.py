@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import inngest.fast_api
 
-load_dotenv()
-
+from scout.core.config import get_settings
 from scout.api.legacy import router as legacy_router
 from scout.api.persisted import router as persisted_router
-from scout.core.config import get_settings
+from scout.workflows.research import INNGEST_FUNCTIONS, inngest_client
 
 
 def create_app() -> FastAPI:
@@ -27,6 +26,12 @@ def create_app() -> FastAPI:
     )
     application.include_router(legacy_router)
     application.include_router(persisted_router)
+    inngest.fast_api.serve(
+        application,
+        inngest_client,
+        INNGEST_FUNCTIONS,
+        serve_path="/api/inngest",
+    )
     return application
 
 
