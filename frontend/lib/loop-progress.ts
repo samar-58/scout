@@ -193,11 +193,18 @@ export function deriveLoopProgress({
         hint: "A completed research run creates the assumptions this loop tests.",
       };
     }
+    const latestConfirmed = [...confirmed].sort((left, right) =>
+      right.created_at.localeCompare(left.created_at),
+    )[0];
+    const guidedNext = latestConfirmed?.recommended_next_action?.trim();
+
     if (open.length > 0) {
       return {
         kind: "build-sprint",
         label: "Build my validation sprint",
-        hint: `${open.length} open assumption${open.length === 1 ? "" : "s"}. Scout will turn the riskiest into experiments you can run this week.`,
+        hint:
+          guidedNext ||
+          `${open.length} open assumption${open.length === 1 ? "" : "s"}. Scout will turn the riskiest into experiments you can run this week.`,
         targetId: "assumptions",
         runsSprint: true,
       };
@@ -205,7 +212,9 @@ export function deriveLoopProgress({
     return {
       kind: "next-cycle",
       label: "Run new research",
-      hint: "Every assumption is settled. Re-run research against the updated thesis to find the next risk.",
+      hint:
+        guidedNext ||
+        "Every assumption is settled. Re-run research against the updated thesis to find the next risk.",
     };
   })();
 

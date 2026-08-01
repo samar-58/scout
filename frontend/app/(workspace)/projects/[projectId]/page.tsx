@@ -60,6 +60,7 @@ export default function ProjectPage() {
   const [selectedReportId, setSelectedReportId] = useState<string>();
   const [resumingRunId, setResumingRunId] = useState<string>();
   const [tab, setTab] = useState<Tab>("validate");
+  const [validateSection, setValidateSection] = useState<string>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
   const [confirmStop, setConfirmStop] = useState(false);
@@ -103,6 +104,23 @@ export default function ProjectPage() {
   // Follow the newest run whenever it is unfinished; otherwise poll nothing.
   const feed = useRunFeed(latestIsActive ? latestRun?.id : undefined);
   const loop = useValidationLoop(projectId);
+
+  const openValidate = useCallback((sectionId?: string) => {
+    setTab("validate");
+    setValidateSection(sectionId);
+  }, []);
+
+  useEffect(() => {
+    if (tab !== "validate" || !validateSection || loop.loading) return;
+    const frame = window.requestAnimationFrame(() => {
+      const target = document.getElementById(validateSection);
+      if (!target) return;
+      const top = target.getBoundingClientRect().top + window.scrollY - 76;
+      window.scrollTo({ top, behavior: "smooth" });
+      setValidateSection(undefined);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [tab, validateSection, loop.loading]);
 
   useEffect(() => {
     if (latestIsActive) setStartedAt((current) => current ?? Date.now());
@@ -317,6 +335,26 @@ export default function ProjectPage() {
                       url: source.url,
                       title: source.title,
                     }))}
+                    reportCreatedAt={selectedReport.created_at}
+                    runId={selectedReport.run_id}
+                    claims={loop.claims}
+                    evidenceRecords={loop.evidence}
+                    loopSummary={{
+                      openAssumptions: loop.assumptions.filter(
+                        (assumption) =>
+                          assumption.review_state !== "rejected" &&
+                          ["untested", "testing", "inconclusive"].includes(
+                            assumption.status,
+                          ),
+                      ).length,
+                      activeExperiments: loop.experiments.filter((experiment) =>
+                        ["planned", "running"].includes(experiment.status),
+                      ).length,
+                      pendingDecisions: loop.decisions.filter(
+                        (decision) => decision.status === "proposed",
+                      ).length,
+                    }}
+                    onOpenValidate={openValidate}
                   />
                   {/*
                     The run that produced this version, replayed from its events —

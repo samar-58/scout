@@ -66,3 +66,57 @@ export const TIMELINE_KIND_LABELS: Record<string, string> = {
 export function categoryLabel(category: string) {
   return category.charAt(0).toUpperCase() + category.slice(1);
 }
+
+/** Mirror of scout/persistence/loop_materializer.py CATEGORY_KEYWORDS. */
+const THESIS_FIELD_KEYWORDS: { field: string; keywords: string[] }[] = [
+  {
+    field: "pricing",
+    keywords: [
+      "pricing",
+      "price",
+      "willingness to pay",
+      "wtp",
+      "monetization",
+      "monetisation",
+    ],
+  },
+  {
+    field: "distribution",
+    keywords: [
+      "distribution",
+      "channel",
+      "acquisition",
+      "gtm",
+      "go-to-market",
+      "cac",
+      "outbound",
+    ],
+  },
+  {
+    field: "customer",
+    keywords: ["customer", "icp", "buyer", "segment", "adopter", "persona"],
+  },
+  {
+    field: "problem",
+    keywords: ["problem", "pain", "workflow", "frequency", "urgency"],
+  },
+  {
+    field: "solution",
+    keywords: ["solution", "product", "copilot", "feature", "mechanism"],
+  },
+  {
+    field: "alternatives",
+    keywords: ["alternative", "competitor", "incumbent", "status quo", "spreadsheet"],
+  },
+];
+
+/** Map free text (claim, assumption) onto a thesis field key when possible. */
+export function classifyThesisField(text: string): string | null {
+  const haystack = text.toLowerCase();
+  for (const entry of THESIS_FIELD_KEYWORDS) {
+    if (entry.keywords.some((keyword) => haystack.includes(keyword))) {
+      return entry.field;
+    }
+  }
+  return null;
+}

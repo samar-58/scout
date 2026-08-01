@@ -386,11 +386,12 @@ async def review_experiment(
             "prompt_version": REVIEW_PROMPT_VERSION,
             "evidence_quality": proposal.evidence_quality,
             "evidence_quality_reason": proposal.evidence_quality_reason,
+            "recommended_next_action": proposal.recommended_next_action,
         },
     )
     return ExperimentReviewRead(
         experiment=ExperimentRead.model_validate(reviewed),
-        decision=DecisionRead.model_validate(decision),
+        decision=DecisionRead.from_decision(decision),
         evidence_quality=proposal.evidence_quality,
         recommended_next_action=proposal.recommended_next_action,
     )
@@ -406,7 +407,7 @@ def list_decisions(
         decisions = _service(session, user.user_id).list_decisions(project_id)
     except ResourceNotFoundError as exc:
         raise _not_found(exc) from exc
-    return [DecisionRead.model_validate(item) for item in decisions]
+    return [DecisionRead.from_decision(item) for item in decisions]
 
 
 @router.post("/decisions/{decision_id}/confirm", response_model=DecisionRead)
@@ -426,7 +427,7 @@ def confirm_decision(
         raise _not_found(exc) from exc
     except InvalidRunStateError as exc:
         raise _conflict(exc) from exc
-    return DecisionRead.model_validate(decision)
+    return DecisionRead.from_decision(decision)
 
 
 @router.post("/decisions/{decision_id}/reject", response_model=DecisionRead)
@@ -445,7 +446,7 @@ def reject_decision(
         raise _not_found(exc) from exc
     except InvalidRunStateError as exc:
         raise _conflict(exc) from exc
-    return DecisionRead.model_validate(decision)
+    return DecisionRead.from_decision(decision)
 
 
 @router.get("/projects/{project_id}/thesis", response_model=list[ThesisVersionRead])

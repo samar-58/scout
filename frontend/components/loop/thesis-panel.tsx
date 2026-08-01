@@ -1,8 +1,16 @@
 "use client";
 
 import { LocalTime } from "@/components/local-time";
-import { THESIS_FIELD_LABELS, TIMELINE_KIND_LABELS } from "@/lib/loop-meta";
-import type { ThesisVersionRecord, TimelineEntryRecord } from "@/lib/scout-api";
+import {
+  classifyThesisField,
+  THESIS_FIELD_LABELS,
+  TIMELINE_KIND_LABELS,
+} from "@/lib/loop-meta";
+import type {
+  ClaimRecord,
+  ThesisVersionRecord,
+  TimelineEntryRecord,
+} from "@/lib/scout-api";
 import { cn } from "@/lib/utils";
 
 /**
@@ -10,16 +18,23 @@ import { cn } from "@/lib/utils";
  *
  * Each line records whether the founder asserted it, Scout inferred it, or a
  * confirmed decision changed it — so "why is this what we believe?" is answerable
- * from the canvas itself.
+ * from the canvas itself. Challenge scrolls to assumptions; edits only happen
+ * through confirmed decisions.
  */
 export function ThesisPanel({
   versions,
   selectedVersion,
   onSelectVersion,
+  claims,
+  onChallengeField,
+  highlightCategory,
 }: {
   versions: ThesisVersionRecord[];
   selectedVersion?: number;
   onSelectVersion: (version: number) => void;
+  claims?: ClaimRecord[];
+  onChallengeField?: (fieldKey: string) => void;
+  highlightCategory?: string;
 }) {
   if (versions.length === 0) {
     return (
@@ -36,11 +51,13 @@ export function ThesisPanel({
     entry: current.fields[field.key],
   })).filter((item) => item.entry?.value);
 
+  const projectCounts = claimStanceTotals(claims);
+
   return (
     <div>
-      {versions.length > 1 && (
-        <div className="mb-4 flex flex-wrap items-center gap-1.5">
-          {versions.map((version) => (
+      <div className="mb-4 flex flex-wrap items-center gap-1.5">
+        {versions.length > 1 &&
+          versions.map((version) => (
             <button
               key={version.id}
               type="button"
@@ -55,31 +72,77 @@ export function ThesisPanel({
               v{version.version}
             </button>
           ))}
-          <span className="ml-1 text-[12px] text-muted-foreground">
-            <LocalTime value={current.created_at} />
-          </span>
-        </div>
-      )}
+        <span className="text-[12px] text-muted-foreground">
+          {versions.length === 1 ? "v1 · " : null}
+          Updated <LocalTime value={current.created_at} />
+        </span>
+      </div>
 
-      <dl className="divide-y divide-border border-y border-border">
-        {entries.map((item) => (
-          <div key={item.key} className="flex flex-col gap-1 py-3 sm:flex-row sm:gap-5">
-            <dt className="w-40 shrink-0 text-[12px] text-muted-foreground">
-              {item.label}
-            </dt>
-            <dd className="min-w-0 flex-1 text-[13.5px] leading-relaxed [overflow-wrap:anywhere]">
-              {item.entry.value}
-              <span className="ml-2 text-[11.5px] text-subtle-foreground">
-                {item.entry.origin === "founder"
-                  ? "you"
-                  : item.entry.origin === "decision"
-                    ? "decision"
-                    : "Scout"}
-              </span>
-            </dd>
-          </div>
-        ))}
-      </dl>
+      <div className="divide-y divide-border border-y border-border">
+        {entries.map((item) => {
+          const counts = claimCountsForField(item.key, claims);
+          const challenged = highlightCategory === item.key;
+          return (
+            <div
+              key={item.key}
+              className={cn(
+                "flex flex-col gap-2 py-3 sm:flex-row sm:items-start sm:gap-5",
+                challenged && "bg-muted/50",
+              )}
+            >
+              <div className="w-40 shrink-0">
+                <p className="text-[12px] text-muted-foreground">{item.label}</p>
+                {(counts.supporting > 0 || counts.contradicting > 0) && (
+                  <p className="mt-1 text-[11.5px] text-muted-foreground">
+                    {counts.supporting > 0 && (
+                      <span className="text-success">
+                        {counts.supporting} for
+                      </span>
+                    )}
+                    {counts.supporting > 0 && counts.contradicting > 0 && " · "}
+                    {counts.contradicting > 0 && (
+                      <span className="text-destructive">
+                        {counts.contradicting} against
+                      </span>
+                    )}
+                  </p>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[13.5px] leading-relaxed [overflow-wrap:anywhere]">
+                  {item.entry.value}
+                  <span className="ml-2 text-[11.5px] text-subtle-foreground">
+                    {item.entry.origin === "founder"
+                      ? "you"
+                      : item.entry.origin === "decision"
+                        ? "decision"
+                        : "Scout"}
+                  </span>
+                </p>
+                {onChallengeField && (
+                  <button
+                    type="button"
+                    onClick={() => onChallengeField(item.key)}
+                    className="mt-1.5 text-[12.5px] font-medium text-foreground underline underline-offset-4 hover:text-brand"
+                  >
+                    Challenge
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {(projectCounts.supporting > 0 ||
+        projectCounts.contradicting > 0 ||
+        projectCounts.unknown > 0) && (
+        <p className="mt-3 text-[12px] text-muted-foreground">
+          Project evidence: {projectCounts.supporting} supporting ·{" "}
+          {projectCounts.contradicting} contradicting · {projectCounts.unknown}{" "}
+          unknown
+        </p>
+      )}
 
       {current.change_note && (
         <p className="mt-3 text-[12.5px] leading-relaxed text-muted-foreground">
@@ -88,6 +151,35 @@ export function ThesisPanel({
       )}
     </div>
   );
+}
+
+function claimStanceTotals(claims: ClaimRecord[] | undefined) {
+  let supporting = 0;
+  let contradicting = 0;
+  let unknown = 0;
+  for (const claim of claims ?? []) {
+    if (claim.stance === "supporting" || claim.stance === "pain") supporting += 1;
+    else if (claim.stance === "contradicting" || claim.stance === "competitor") {
+      contradicting += 1;
+    } else unknown += 1;
+  }
+  return { supporting, contradicting, unknown };
+}
+
+function claimCountsForField(
+  fieldKey: string,
+  claims: ClaimRecord[] | undefined,
+) {
+  let supporting = 0;
+  let contradicting = 0;
+  for (const claim of claims ?? []) {
+    if (classifyThesisField(claim.text) !== fieldKey) continue;
+    if (claim.stance === "supporting" || claim.stance === "pain") supporting += 1;
+    else if (claim.stance === "contradicting" || claim.stance === "competitor") {
+      contradicting += 1;
+    }
+  }
+  return { supporting, contradicting };
 }
 
 const KIND_DOT: Record<string, string> = {

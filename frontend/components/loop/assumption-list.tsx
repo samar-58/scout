@@ -38,6 +38,7 @@ export function AssumptionList({
   onToggleSelect,
   onReview,
   busy,
+  highlightCategory,
 }: {
   assumptions: AssumptionRecord[];
   experiments: ExperimentRecord[];
@@ -52,6 +53,7 @@ export function AssumptionList({
     },
   ) => void;
   busy?: string;
+  highlightCategory?: string;
 }) {
   const [editingId, setEditingId] = useState<string>();
   const [draft, setDraft] = useState("");
@@ -84,7 +86,15 @@ export function AssumptionList({
         const selectable = !rejected && assumption.status !== "supported";
 
         return (
-          <li key={assumption.id} className={cn(rejected && "opacity-55")}>
+          <li
+            key={assumption.id}
+            className={cn(
+              rejected && "opacity-55",
+              highlightCategory &&
+                assumption.category === highlightCategory &&
+                "bg-muted/50",
+            )}
+          >
             <Collapsible className="group">
               <div className="flex flex-col gap-3 py-3.5 sm:flex-row sm:items-start sm:justify-between sm:gap-5">
                 <div className="flex min-w-0 flex-1 items-start gap-3">

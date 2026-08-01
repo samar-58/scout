@@ -266,6 +266,24 @@ class DecisionRead(BaseModel):
     status: str
     confirmed_at: datetime | None
     created_at: datetime
+    # Lifted from Decision.provenance at read time (no dedicated columns).
+    evidence_quality: str | None = None
+    recommended_next_action: str | None = None
+
+    @classmethod
+    def from_decision(cls, decision: Any) -> "DecisionRead":
+        payload = cls.model_validate(decision)
+        provenance = getattr(decision, "provenance", None) or {}
+        if not isinstance(provenance, dict):
+            return payload
+        return payload.model_copy(
+            update={
+                "evidence_quality": provenance.get("evidence_quality"),
+                "recommended_next_action": provenance.get(
+                    "recommended_next_action"
+                ),
+            }
+        )
 
 
 class DecisionConfirm(BaseModel):

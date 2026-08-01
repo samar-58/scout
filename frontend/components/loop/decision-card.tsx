@@ -51,12 +51,20 @@ export function DecisionCard({
       <p className="mt-1 text-[12px] text-muted-foreground">
         <LocalTime value={decision.confirmed_at ?? decision.created_at} />
         {decision.confidence !== null && <> · {decision.confidence}% confidence</>}
+        {decision.evidence_quality && <> · {decision.evidence_quality} evidence</>}
         {changes.length === 0 && <> · no thesis change</>}
       </p>
 
       {decision.rationale && (
         <p className="mt-3 text-[13px] leading-relaxed text-muted-foreground">
           {decision.rationale}
+        </p>
+      )}
+
+      {decision.recommended_next_action && (
+        <p className="mt-3 border-l-2 border-border-strong pl-3 text-[13px] leading-relaxed">
+          <span className="font-medium">Next:</span>{" "}
+          {decision.recommended_next_action}
         </p>
       )}
 

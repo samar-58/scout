@@ -438,10 +438,26 @@ class ValidationLoopTests(unittest.TestCase):
         self.assertEqual(body["experiment"]["result"], "contradicted")
         self.assertEqual(body["experiment"]["status"], "completed")
         self.assertEqual(body["evidence_quality"], "moderate")
+        self.assertEqual(
+            body["recommended_next_action"],
+            "Test per-filing pricing with the same firms.",
+        )
         self.assertEqual(body["decision"]["status"], "proposed")
+        self.assertEqual(body["decision"]["evidence_quality"], "moderate")
+        self.assertEqual(
+            body["decision"]["recommended_next_action"],
+            "Test per-filing pricing with the same firms.",
+        )
         self.assertEqual(
             sorted(body["decision"]["thesis_changes"]),
             ["pricing", "problem"],
+        )
+
+        listed = self.client.get(f"/api/projects/{self.project_id}/decisions").json()
+        self.assertEqual(listed[0]["id"], body["decision"]["id"])
+        self.assertEqual(
+            listed[0]["recommended_next_action"],
+            "Test per-filing pricing with the same firms.",
         )
 
         # The tested assumption inherits the reviewed result.

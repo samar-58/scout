@@ -116,6 +116,7 @@ describe("validation loop API", () => {
     expect(calls[0].init?.method).toBe("POST");
     expect(review.decision.status).toBe("proposed");
     expect(review.evidence_quality).toBe("moderate");
+    expect(review.recommended_next_action).toBe("Test per-filing pricing");
   });
 
   test("confirms and rejects decisions through their own endpoints", async () => {

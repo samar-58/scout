@@ -1,17 +1,15 @@
 "use client";
 
+import { useState } from "react";
 import { CanvasSection } from "@/components/canvas/canvas-section";
+import { LocalTime } from "@/components/local-time";
 import type { CanvasEvidence, EvidenceItem } from "@/lib/report-canvas";
 import { cn } from "@/lib/utils";
 
 /**
  * Three columns rather than one narrative: a founder should see at a glance
  * whether the research leaned for or against the idea, and what it could not
- * answer at all. The unknown column gets equal weight on purpose.
- *
- * Colour here is one dot per item — the direction of a finding is the only thing
- * worth encoding. The washed headers, tinted rules and icon set this had before
- * repeated that same fact four times per column.
+ * answer at all. Persisted claims expand to snippet, source, and workflow.
  */
 export function EvidenceBoard({ evidence }: { evidence: CanvasEvidence }) {
   const total =
@@ -74,17 +72,81 @@ function EvidenceColumn({
       ) : (
         <ul className="divide-y divide-border">
           {items.map((item, position) => (
-            <li key={`${item.origin}-${position}`} className="min-w-0 py-3">
-              <p className="text-[13px] leading-relaxed text-foreground/85 [overflow-wrap:anywhere]">
-                {item.text}
-              </p>
-              <span className="mt-1 block text-[11.5px] text-muted-foreground">
-                {item.origin}
-              </span>
-            </li>
+            <EvidenceRow
+              key={item.claimId ?? `${item.origin}-${position}`}
+              item={item}
+            />
           ))}
         </ul>
       )}
     </div>
+  );
+}
+
+function EvidenceRow({ item }: { item: EvidenceItem }) {
+  const [open, setOpen] = useState(false);
+  const expandable = Boolean(
+    item.snippet || item.sourceUrl || item.workflow || item.createdAt,
+  );
+
+  return (
+    <li className="min-w-0 py-3">
+      {expandable ? (
+        <button
+          type="button"
+          onClick={() => setOpen((current) => !current)}
+          className="w-full text-left"
+          aria-expanded={open}
+        >
+          <p className="text-[13px] leading-relaxed text-foreground/85 [overflow-wrap:anywhere]">
+            {item.text}
+          </p>
+          <span className="mt-1 block text-[11.5px] text-muted-foreground">
+            {item.origin}
+            {open ? " · hide source" : " · show source"}
+          </span>
+        </button>
+      ) : (
+        <>
+          <p className="text-[13px] leading-relaxed text-foreground/85 [overflow-wrap:anywhere]">
+            {item.text}
+          </p>
+          <span className="mt-1 block text-[11.5px] text-muted-foreground">
+            {item.origin}
+          </span>
+        </>
+      )}
+
+      {open && expandable && (
+        <div className="mt-2 space-y-1.5 border-l-2 border-border pl-3 text-[12.5px] leading-relaxed text-muted-foreground">
+          {item.snippet && (
+            <p className="text-foreground/75 [overflow-wrap:anywhere]">
+              “{item.snippet}”
+            </p>
+          )}
+          {item.sourceUrl && (
+            <a
+              href={item.sourceUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="block text-foreground underline-offset-4 hover:underline [overflow-wrap:anywhere]"
+            >
+              {item.sourceTitle?.trim() || item.sourceUrl}
+            </a>
+          )}
+          {(item.workflow || item.createdAt) && (
+            <p>
+              {item.workflow}
+              {item.workflow && item.createdAt ? " · " : null}
+              {item.createdAt ? (
+                <>
+                  recorded <LocalTime value={item.createdAt} />
+                </>
+              ) : null}
+            </p>
+          )}
+        </div>
+      )}
+    </li>
   );
 }

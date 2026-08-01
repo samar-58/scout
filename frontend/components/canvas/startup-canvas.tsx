@@ -1,23 +1,21 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { AnalystNotes } from "@/components/canvas/analyst-notes";
 import { AssumptionBoard } from "@/components/canvas/assumption-board";
 import { CanvasRail, type RailItem } from "@/components/canvas/canvas-rail";
 import { CompetitorBoard } from "@/components/canvas/competitor-board";
 import { EvidenceBoard } from "@/components/canvas/evidence-board";
-import {
-  ExperimentBoard,
-  type ExperimentStatus,
-} from "@/components/canvas/experiment-board";
+import { ExperimentBoard } from "@/components/canvas/experiment-board";
 import { MarketPanel } from "@/components/canvas/market-panel";
 import { MoatGtmPanel } from "@/components/canvas/moat-gtm-panel";
 import { SourcesPanel } from "@/components/canvas/sources-panel";
 import { ThesisGrid } from "@/components/canvas/thesis-grid";
 import { VerdictHero } from "@/components/canvas/verdict-hero";
 import { ReportToolbar } from "@/components/report-toolbar";
-import { buildCanvasModel, type AssumptionStatus } from "@/lib/report-canvas";
+import { buildCanvasModel, type CanvasEvidence, type EvidenceItem } from "@/lib/report-canvas";
 import type { StructuredReport } from "@/lib/report-types";
+import type { ClaimRecord, EvidenceRecord } from "@/lib/scout-api";
 import type { Source, StartupPayload } from "@/lib/types";
 
 function scrollToId(id: string) {
@@ -27,51 +25,54 @@ function scrollToId(id: string) {
   window.scrollTo({ top, behavior: "smooth" });
 }
 
+export interface CanvasLoopSummary {
+  openAssumptions: number;
+  activeExperiments: number;
+  pendingDecisions: number;
+}
+
 /**
- * The canvas is the only view of a finished run. The Markdown report is still
- * produced by the backend and stays available through Copy and Download, and
- * every narrative part of it (score explanation, per-agent notes) is surfaced as
- * a section here.
+ * Point-in-time report view for a finished run.
  *
- * Assumption and experiment statuses are deliberately local component state.
- * Nothing is persisted yet, so the UI says so rather than implying a save.
+ * Mutations live on Validate. This surface reshapes the structured report (and
+ * persisted claims/evidence when available) into a readable canvas, then hands
+ * the founder back to the living loop.
  */
 export function StartupCanvas({
   report,
   payload,
   markdown,
   sources,
+  reportCreatedAt,
+  runId,
+  claims,
+  evidenceRecords,
+  loopSummary,
+  onOpenValidate,
 }: {
   report: StructuredReport;
   payload?: StartupPayload;
   markdown?: string;
   sources: Source[];
+  reportCreatedAt?: string;
+  runId?: string | null;
+  claims?: ClaimRecord[];
+  evidenceRecords?: EvidenceRecord[];
+  loopSummary?: CanvasLoopSummary;
+  onOpenValidate?: (sectionId?: string) => void;
 }) {
   const model = useMemo(() => buildCanvasModel(report, payload), [report, payload]);
-  const [assumptionStatuses, setAssumptionStatuses] = useState<
-    Record<string, AssumptionStatus>
-  >({});
-  const [experimentStatuses, setExperimentStatuses] = useState<
-    Record<string, ExperimentStatus>
-  >({});
-  const [focusedExperiment, setFocusedExperiment] = useState<string>();
 
-  const setAssumptionStatus = useCallback(
-    (id: string, status: AssumptionStatus) =>
-      setAssumptionStatuses((current) => ({ ...current, [id]: status })),
-    [],
+  const persistedEvidence = useMemo(
+    () =>
+      buildPersistedEvidence(
+        claims ?? [],
+        evidenceRecords ?? [],
+        runId ?? undefined,
+      ),
+    [claims, evidenceRecords, runId],
   );
-
-  const setExperimentStatus = useCallback(
-    (id: string, status: ExperimentStatus) =>
-      setExperimentStatuses((current) => ({ ...current, [id]: status })),
-    [],
-  );
-
-  const openExperiment = useCallback((experimentId: string) => {
-    setFocusedExperiment(experimentId);
-    scrollToId(experimentId);
-  }, []);
+  const evidence = persistedEvidence ?? model.evidence;
 
   const reportSources = sources.length
     ? sources
@@ -86,14 +87,10 @@ export function StartupCanvas({
   const hasMoat = Boolean(report.moat_analysis || report.gtm_strategy);
   const hasMarket = Boolean(report.market_analysis);
   const evidenceCount =
-    model.evidence.supporting.length +
-    model.evidence.contradicting.length +
-    model.evidence.unknown.length;
+    evidence.supporting.length +
+    evidence.contradicting.length +
+    evidence.unknown.length;
 
-  /*
-   * The rail and the page are derived from one ordered list, so a section can
-   * never appear in the contents without rendering, or the reverse.
-   */
   const sections: (RailItem & { render: () => React.ReactNode })[] = [];
 
   if (model.thesis.length > 0) {
@@ -101,7 +98,14 @@ export function StartupCanvas({
       id: "thesis",
       label: "Thesis",
       count: model.thesis.length,
-      render: () => <ThesisGrid cards={model.thesis} />,
+      render: () => (
+        <ThesisGrid
+          cards={model.thesis}
+          updatedAt={reportCreatedAt}
+          claims={claims}
+          onOpenValidate={onOpenValidate}
+        />
+      ),
     });
   }
   if (model.assumptions.length > 0) {
@@ -113,9 +117,7 @@ export function StartupCanvas({
         <AssumptionBoard
           assumptions={model.assumptions}
           experiments={model.experiments}
-          statuses={assumptionStatuses}
-          onStatusChange={setAssumptionStatus}
-          onOpenExperiment={openExperiment}
+          onOpenValidate={onOpenValidate}
         />
       ),
     });
@@ -128,9 +130,7 @@ export function StartupCanvas({
       render: () => (
         <ExperimentBoard
           experiments={model.experiments}
-          statuses={experimentStatuses}
-          focusedId={focusedExperiment}
-          onStatusChange={setExperimentStatus}
+          onOpenValidate={() => onOpenValidate?.("experiments")}
         />
       ),
     });
@@ -140,7 +140,7 @@ export function StartupCanvas({
       id: "evidence",
       label: "Evidence",
       count: evidenceCount,
-      render: () => <EvidenceBoard evidence={model.evidence} />,
+      render: () => <EvidenceBoard evidence={evidence} />,
     });
   }
   if (hasMarket) {
@@ -191,13 +191,31 @@ export function StartupCanvas({
       <CanvasRail items={railItems} onNavigate={scrollToId} />
 
       <div className="min-w-0 space-y-7">
+        {loopSummary && (
+          <p className="text-[12.5px] text-muted-foreground">
+            Living loop:{" "}
+            <span className="tabular-nums text-foreground/80">
+              {loopSummary.openAssumptions}
+            </span>{" "}
+            open assumptions ·{" "}
+            <span className="tabular-nums text-foreground/80">
+              {loopSummary.activeExperiments}
+            </span>{" "}
+            active experiments ·{" "}
+            <span className="tabular-nums text-foreground/80">
+              {loopSummary.pendingDecisions}
+            </span>{" "}
+            pending decisions
+          </p>
+        )}
+
         <VerdictHero
           decision={model.decision}
           dimensions={model.dimensions}
           scoreExplanation={model.scoreExplanation}
           onStartExperiments={
-            model.experiments.length > 0
-              ? () => scrollToId("experiments")
+            onOpenValidate
+              ? () => onOpenValidate("experiments")
               : undefined
           }
         />
@@ -208,13 +226,62 @@ export function StartupCanvas({
 
         <footer className="flex flex-wrap items-center justify-between gap-4 border-t border-border pt-5">
           <p className="max-w-xl text-[12px] leading-relaxed text-muted-foreground">
-            Statuses you set on assumptions and experiments live in this browser
-            tab only — they are not saved yet.
-            {markdown && " The long-form write-up is still generated:"}
+            This is a point-in-time report. Assumptions, experiments, and decisions
+            are tracked on Validate.
+            {markdown && " The long-form write-up is still available:"}
           </p>
           {markdown && <ReportToolbar markdown={markdown} />}
         </footer>
       </div>
     </div>
   );
+}
+
+function buildPersistedEvidence(
+  claims: ClaimRecord[],
+  evidenceRecords: EvidenceRecord[],
+  runId: string | undefined,
+): CanvasEvidence | null {
+  const scoped = runId
+    ? claims.filter((claim) => claim.run_id === runId)
+    : claims;
+  if (scoped.length === 0) return null;
+
+  const byClaim = new Map<string, EvidenceRecord[]>();
+  for (const record of evidenceRecords) {
+    if (!record.claim_id) continue;
+    if (runId && record.run_id && record.run_id !== runId) continue;
+    const list = byClaim.get(record.claim_id) ?? [];
+    list.push(record);
+    byClaim.set(record.claim_id, list);
+  }
+
+  const supporting: EvidenceItem[] = [];
+  const contradicting: EvidenceItem[] = [];
+  const unknown: EvidenceItem[] = [];
+
+  for (const claim of scoped) {
+    const linked = byClaim.get(claim.id) ?? [];
+    const primary = linked[0];
+    const item: EvidenceItem = {
+      text: claim.text,
+      origin: claim.origin,
+      claimId: claim.id,
+      stance: claim.stance,
+      snippet: primary?.snippet ?? undefined,
+      sourceUrl: primary?.source_url ?? undefined,
+      sourceTitle: primary?.source_title ?? undefined,
+      workflow: primary?.workflow ?? undefined,
+      createdAt: primary?.created_at ?? claim.created_at,
+    };
+    if (claim.stance === "supporting" || claim.stance === "pain") {
+      supporting.push(item);
+    } else if (claim.stance === "contradicting" || claim.stance === "competitor") {
+      contradicting.push(item);
+    } else {
+      unknown.push(item);
+    }
+  }
+
+  return { supporting, contradicting, unknown };
 }

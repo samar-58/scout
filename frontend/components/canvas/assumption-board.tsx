@@ -1,18 +1,14 @@
 "use client";
 
-import { ChevronDown } from "lucide-react";
+import { ArrowRight, ChevronDown } from "lucide-react";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { CanvasSection } from "@/components/canvas/canvas-section";
-import type {
-  AssumptionStatus,
-  CanvasAssumption,
-  CanvasExperiment,
-} from "@/lib/report-canvas";
-import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import type { CanvasAssumption, CanvasExperiment } from "@/lib/report-canvas";
 
 const KIND_LABEL = {
   risk: "Risk to disprove",
@@ -29,13 +25,11 @@ const KIND_LABEL = {
 export function AssumptionBoard({
   assumptions,
   experiments,
-  onOpenExperiment,
   onOpenValidate,
 }: {
   assumptions: CanvasAssumption[];
   experiments: CanvasExperiment[];
-  onOpenExperiment?: (experimentId: string) => void;
-  onOpenValidate?: () => void;
+  onOpenValidate?: (sectionId?: string) => void;
 }) {
   if (assumptions.length === 0) return null;
 
@@ -56,7 +50,7 @@ export function AssumptionBoard({
             size="sm"
             variant="outline"
             className="gap-1.5"
-            onClick={onOpenValidate}
+            onClick={() => onOpenValidate("assumptions")}
           >
             Open Validate
             <ArrowRight size={13} />
@@ -126,7 +120,7 @@ export function AssumptionBoard({
                     {linked && (
                       <button
                         type="button"
-                        onClick={() => onOpenExperiment?.(linked.id)}
+                        onClick={() => onOpenValidate?.("experiments")}
                         className="text-[12.5px] font-medium text-foreground underline underline-offset-4 transition-colors hover:text-brand"
                       >
                         Test with: {linked.name}

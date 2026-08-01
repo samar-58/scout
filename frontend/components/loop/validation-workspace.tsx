@@ -32,6 +32,7 @@ function scrollToSection(id: string) {
 export function ValidationWorkspace({ loop }: { loop: ValidationLoopState }) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [thesisVersion, setThesisVersion] = useState<number>();
+  const [highlightCategory, setHighlightCategory] = useState<string>();
 
   const progress = useMemo(
     () =>
@@ -124,6 +125,12 @@ export function ValidationWorkspace({ loop }: { loop: ValidationLoopState }) {
           versions={loop.thesisVersions}
           selectedVersion={thesisVersion}
           onSelectVersion={setThesisVersion}
+          claims={loop.claims}
+          highlightCategory={highlightCategory}
+          onChallengeField={(fieldKey) => {
+            setHighlightCategory(fieldKey);
+            scrollToSection("assumptions");
+          }}
         />
       </CanvasSection>
 
@@ -164,6 +171,7 @@ export function ValidationWorkspace({ loop }: { loop: ValidationLoopState }) {
           onToggleSelect={toggleSelect}
           onReview={(id, review) => void loop.reviewAssumptionField(id, review)}
           busy={loop.busy}
+          highlightCategory={highlightCategory}
         />
         {openAssumptionIds.length > 0 && (
           <p className="mt-3 text-[12px] text-muted-foreground">

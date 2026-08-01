@@ -70,6 +70,13 @@ export interface CanvasExperiment {
 export interface EvidenceItem {
   text: string;
   origin: string;
+  claimId?: string;
+  stance?: string;
+  snippet?: string;
+  sourceUrl?: string;
+  sourceTitle?: string;
+  workflow?: string;
+  createdAt?: string;
 }
 
 export interface CanvasEvidence {

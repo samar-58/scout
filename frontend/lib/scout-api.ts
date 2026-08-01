@@ -377,6 +377,8 @@ export interface DecisionRecord {
   status: "proposed" | "confirmed" | "rejected";
   confirmed_at: string | null;
   created_at: string;
+  evidence_quality?: string | null;
+  recommended_next_action?: string | null;
 }
 
 export interface ThesisVersionRecord {

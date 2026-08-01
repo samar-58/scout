@@ -9,6 +9,8 @@ import {
   listAssumptions,
   listDecisions,
   listExperiments,
+  listProjectClaims,
+  listProjectEvidence,
   listProjectTimeline,
   listThesisVersions,
   rejectDecision,
@@ -18,7 +20,9 @@ import {
   type AssumptionRecord,
   type AssumptionReviewState,
   type AssumptionStatusValue,
+  type ClaimRecord,
   type DecisionRecord,
+  type EvidenceRecord,
   type ExperimentRecord,
   type ExperimentStatus,
   type ObservationKind,
@@ -32,6 +36,8 @@ export interface ValidationLoopState {
   decisions: DecisionRecord[];
   thesisVersions: ThesisVersionRecord[];
   timeline: TimelineEntryRecord[];
+  claims: ClaimRecord[];
+  evidence: EvidenceRecord[];
   loading: boolean;
   busy: string | undefined;
   error: string | undefined;
@@ -77,6 +83,8 @@ export function useValidationLoop(projectId: string | undefined): ValidationLoop
   const [decisions, setDecisions] = useState<DecisionRecord[]>([]);
   const [thesisVersions, setThesisVersions] = useState<ThesisVersionRecord[]>([]);
   const [timeline, setTimeline] = useState<TimelineEntryRecord[]>([]);
+  const [claims, setClaims] = useState<ClaimRecord[]>([]);
+  const [evidence, setEvidence] = useState<EvidenceRecord[]>([]);
   const [loading, setLoading] = useState(Boolean(projectId));
   const [busy, setBusy] = useState<string>();
   const [error, setError] = useState<string>();
@@ -87,19 +95,30 @@ export function useValidationLoop(projectId: string | undefined): ValidationLoop
     try {
       const token = await getToken();
       if (!token) throw new Error("Your session has expired. Please sign in again.");
-      const [nextAssumptions, nextExperiments, nextDecisions, nextThesis, nextTimeline] =
-        await Promise.all([
-          listAssumptions(token, projectId),
-          listExperiments(token, projectId),
-          listDecisions(token, projectId),
-          listThesisVersions(token, projectId),
-          listProjectTimeline(token, projectId),
-        ]);
+      const [
+        nextAssumptions,
+        nextExperiments,
+        nextDecisions,
+        nextThesis,
+        nextTimeline,
+        nextClaims,
+        nextEvidence,
+      ] = await Promise.all([
+        listAssumptions(token, projectId),
+        listExperiments(token, projectId),
+        listDecisions(token, projectId),
+        listThesisVersions(token, projectId),
+        listProjectTimeline(token, projectId),
+        listProjectClaims(token, projectId),
+        listProjectEvidence(token, projectId),
+      ]);
       setAssumptions(nextAssumptions);
       setExperiments(nextExperiments);
       setDecisions(nextDecisions);
       setThesisVersions(nextThesis);
       setTimeline(nextTimeline);
+      setClaims(nextClaims);
+      setEvidence(nextEvidence);
       setError(undefined);
     } catch (loadError) {
       setError(
@@ -149,6 +168,8 @@ export function useValidationLoop(projectId: string | undefined): ValidationLoop
     decisions,
     thesisVersions,
     timeline,
+    claims,
+    evidence,
     loading,
     busy,
     error,
@@ -179,7 +200,10 @@ export function useValidationLoop(projectId: string | undefined): ValidationLoop
     requestReview: (experimentId) =>
       run(`review:${experimentId}`, async (token) => {
         const review = await reviewExperiment(token, experimentId);
-        return `Scout reviewed the results: ${review.experiment.result}. Confirm or reject the proposed decision below.`;
+        const next = review.recommended_next_action?.trim();
+        return next
+          ? `Scout reviewed the results: ${review.experiment.result}. Next: ${next}`
+          : `Scout reviewed the results: ${review.experiment.result}. Confirm or reject the proposed decision below.`;
       }),
     confirm: (decisionId, changeNote) =>
       run(`decision:${decisionId}`, async (token) => {
@@ -188,9 +212,12 @@ export function useValidationLoop(projectId: string | undefined): ValidationLoop
           decisionId,
           changeNote ? { change_note: changeNote } : {},
         );
-        return Object.keys(decision.thesis_changes).length > 0
-          ? "Decision confirmed and a new thesis version was created."
-          : "Decision confirmed. The thesis is unchanged.";
+        const next = decision.recommended_next_action?.trim();
+        const base =
+          Object.keys(decision.thesis_changes).length > 0
+            ? "Decision confirmed and a new thesis version was created."
+            : "Decision confirmed. The thesis is unchanged.";
+        return next ? `${base} Next: ${next}` : base;
       }),
     reject: (decisionId, note) =>
       run(`decision:${decisionId}`, async (token) => {
