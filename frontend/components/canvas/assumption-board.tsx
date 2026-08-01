@@ -14,42 +14,28 @@ import type {
 } from "@/lib/report-canvas";
 import { cn } from "@/lib/utils";
 
-const STATUS_OPTIONS: { value: AssumptionStatus; label: string }[] = [
-  { value: "untested", label: "Untested" },
-  { value: "testing", label: "Testing" },
-  { value: "supported", label: "Supported" },
-  { value: "contradicted", label: "Contradicted" },
-  { value: "inconclusive", label: "Inconclusive" },
-];
-
-/** Status shows as a dot; the select next to it already spells out the word. */
-const STATUS_DOT: Record<AssumptionStatus, string> = {
-  untested: "bg-border-strong",
-  testing: "bg-brand",
-  supported: "bg-success",
-  contradicted: "bg-destructive",
-  inconclusive: "bg-warning",
-};
+const KIND_LABEL = {
+  risk: "Risk to disprove",
+  objection: "Investor objection",
+} as const;
 
 /**
- * The assumptions still open, as rows.
+ * The assumptions this report surfaced, as a read-only record.
  *
- * Each row previously had a coloured left rail, a tinted background wash, a
- * kind eyebrow in accent, a status pill *and* a status select — five signals for
- * two facts. Now: title, one dot, one select, and the detail behind a caret.
+ * Status and review live on the project's Validate tab, where they are persisted
+ * against first-class assumption records. This board deliberately has no controls:
+ * a status set here would be a second source of truth for the same fact.
  */
 export function AssumptionBoard({
   assumptions,
   experiments,
-  statuses,
-  onStatusChange,
   onOpenExperiment,
+  onOpenValidate,
 }: {
   assumptions: CanvasAssumption[];
   experiments: CanvasExperiment[];
-  statuses: Record<string, AssumptionStatus>;
-  onStatusChange: (id: string, status: AssumptionStatus) => void;
   onOpenExperiment?: (experimentId: string) => void;
+  onOpenValidate?: () => void;
 }) {
   if (assumptions.length === 0) return null;
 
@@ -62,11 +48,24 @@ export function AssumptionBoard({
       id="assumptions"
       eyebrow="Assumptions"
       title="What has to be true"
-      description="Research cannot settle these — only customers can. Set a status as you learn."
+      description="Research cannot settle these — only customers can. Track and test them on the Validate tab."
+      action={
+        onOpenValidate ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="gap-1.5"
+            onClick={onOpenValidate}
+          >
+            Open Validate
+            <ArrowRight size={13} />
+          </Button>
+        ) : undefined
+      }
     >
       <ul className="divide-y divide-border border-y border-border">
         {assumptions.map((assumption) => {
-          const status = statuses[assumption.id] ?? "untested";
           const linked = assumption.experimentId
             ? experimentsById.get(assumption.experimentId)
             : undefined;
@@ -79,43 +78,18 @@ export function AssumptionBoard({
                     <div className="flex items-baseline gap-2">
                       <span
                         aria-hidden
-                        className={cn(
-                          "size-1.5 shrink-0 translate-y-[-2px] rounded-full",
-                          STATUS_DOT[status],
-                        )}
+                        className="size-1.5 shrink-0 translate-y-[-2px] rounded-full bg-border-strong"
                       />
                       <p className="min-w-0 text-[13.5px] leading-snug font-medium [overflow-wrap:anywhere]">
                         {assumption.title}
                       </p>
                     </div>
                     <p className="mt-1 pl-3.5 text-[12px] text-muted-foreground">
-                      {assumption.kind === "risk"
-                        ? "Risk to disprove"
-                        : "Investor objection"}
+                      {KIND_LABEL[assumption.kind]}
                     </p>
                   </div>
 
                   <div className="flex shrink-0 items-center gap-1.5">
-                    <label className="sr-only" htmlFor={`status-${assumption.id}`}>
-                      Status for {assumption.title}
-                    </label>
-                    <select
-                      id={`status-${assumption.id}`}
-                      value={status}
-                      onChange={(event) =>
-                        onStatusChange(
-                          assumption.id,
-                          event.target.value as AssumptionStatus,
-                        )
-                      }
-                      className="h-8 rounded-md border border-border bg-card px-2 text-[12.5px] focus:border-border-strong focus:outline-none"
-                    >
-                      {STATUS_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
                     <CollapsibleTrigger asChild>
                       <button
                         type="button"

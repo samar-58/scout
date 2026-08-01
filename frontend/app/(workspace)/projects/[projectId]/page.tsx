@@ -7,6 +7,7 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { StartupCanvas } from "@/components/canvas/startup-canvas";
 import { LocalTime } from "@/components/local-time";
+import { ValidationWorkspace } from "@/components/loop/validation-workspace";
 import { RunTimeline } from "@/components/projects/run-timeline";
 import { ResearchActivity } from "@/components/research-activity";
 import { RunView, type RunOutcomeState } from "@/components/run-view";
@@ -25,6 +26,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { useRunFeed } from "@/hooks/use-run-feed";
+import { useValidationLoop } from "@/hooks/use-validation-loop";
 import { plural } from "@/lib/format";
 import {
   getProject,
@@ -37,7 +39,7 @@ import {
 } from "@/lib/scout-api";
 import { cn } from "@/lib/utils";
 
-type Tab = "canvas" | "runs";
+type Tab = "validate" | "canvas" | "runs";
 
 /**
  * A project: its live run, its canvas, and its history.
@@ -57,7 +59,7 @@ export default function ProjectPage() {
   const [reports, setReports] = useState<ReportArtifactRecord[]>([]);
   const [selectedReportId, setSelectedReportId] = useState<string>();
   const [resumingRunId, setResumingRunId] = useState<string>();
-  const [tab, setTab] = useState<Tab>("canvas");
+  const [tab, setTab] = useState<Tab>("validate");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
   const [confirmStop, setConfirmStop] = useState(false);
@@ -100,6 +102,7 @@ export default function ProjectPage() {
 
   // Follow the newest run whenever it is unfinished; otherwise poll nothing.
   const feed = useRunFeed(latestIsActive ? latestRun?.id : undefined);
+  const loop = useValidationLoop(projectId);
 
   useEffect(() => {
     if (latestIsActive) setStartedAt((current) => current ?? Date.now());
@@ -114,8 +117,9 @@ export default function ProjectPage() {
   useEffect(() => {
     if (!feed.settledRunId) return;
     void load();
+    void loop.reload();
     void refreshSidebar();
-  }, [feed.settledRunId, load, refreshSidebar]);
+  }, [feed.settledRunId, load, loop.reload, refreshSidebar]);
 
   const selectedReport = useMemo(
     () => reports.find((report) => report.id === selectedReportId) ?? reports[0],
@@ -197,6 +201,20 @@ export default function ProjectPage() {
       >
         {!showLiveRun && (
           <div className="flex items-center gap-1 px-3 sm:px-5">
+            <TabButton active={tab === "validate"} onClick={() => setTab("validate")}>
+              Validate
+              {loop.assumptions.length > 0 && (
+                <span className="ml-1.5 tabular-nums text-subtle-foreground">
+                  {loop.assumptions.length}
+                </span>
+              )}
+              {loop.decisions.some((decision) => decision.status === "proposed") && (
+                <span
+                  aria-label="Decisions awaiting confirmation"
+                  className="ml-1.5 inline-block size-1.5 rounded-full bg-brand align-middle"
+                />
+              )}
+            </TabButton>
             <TabButton active={tab === "canvas"} onClick={() => setTab("canvas")}>
               Canvas
               {reports.length > 0 && (
@@ -249,6 +267,13 @@ export default function ProjectPage() {
             <p className="py-20 text-center text-[13px] text-muted-foreground">
               This project could not be found.
             </p>
+          ) : tab === "validate" ? (
+            <div className="mx-auto max-w-[64rem]">
+              <p className="pb-1 text-[13px] leading-relaxed text-muted-foreground">
+                {project.idea}
+              </p>
+              <ValidationWorkspace loop={loop} />
+            </div>
           ) : tab === "canvas" ? (
             <div className="mx-auto max-w-[84rem]">
               {/* One quiet line of context, then straight into the canvas. */}

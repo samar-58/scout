@@ -67,6 +67,47 @@ const CONTEXT_GROUPS: {
   },
 ];
 
+/** Underline field that grows with its content so extracted briefs are never clipped. */
+function GrowingField({
+  label,
+  value,
+  placeholder,
+  disabled,
+  onChange,
+  wide = false,
+}: {
+  label: string;
+  value: string;
+  placeholder: string;
+  disabled?: boolean;
+  onChange: (value: string) => void;
+  wide?: boolean;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "0px";
+    el.style.height = `${Math.max(el.scrollHeight, 22)}px`;
+  }, [value]);
+
+  return (
+    <label className={cn("block min-w-0", wide && "sm:col-span-2")}>
+      <span className="block text-[12px] text-muted-foreground">{label}</span>
+      <textarea
+        ref={ref}
+        rows={1}
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="mt-1 block w-full resize-none overflow-hidden border-b border-border bg-transparent pb-1.5 text-[13px] leading-snug break-words placeholder:text-subtle-foreground focus:border-foreground focus:outline-none disabled:opacity-60"
+      />
+    </label>
+  );
+}
+
 const IDEA_MAX_LENGTH = 2000;
 
 const ALL_CONTEXT_KEYS = [
@@ -259,28 +300,17 @@ export function Composer({
               {CONTEXT_GROUPS.map((group) => (
                 <fieldset key={group.title} className="p-4">
                   <legend className="label mb-2.5">{group.title}</legend>
-                  <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+                  <div className="grid gap-x-6 gap-y-3.5 sm:grid-cols-2">
                     {group.fields.map((field) => (
-                      <label
+                      <GrowingField
                         key={field.key}
-                        className={cn(
-                          "block",
-                          field.wide && "sm:col-span-2",
-                        )}
-                      >
-                        <span className="block text-[12px] text-muted-foreground">
-                          {field.label}
-                        </span>
-                        <input
-                          value={form[field.key]}
-                          disabled={isExtractingBrief}
-                          onChange={(event) =>
-                            onUpdate(field.key, event.target.value)
-                          }
-                          placeholder={field.placeholder}
-                          className="mt-1 w-full border-b border-border bg-transparent pb-1.5 text-[13px] placeholder:text-subtle-foreground focus:border-foreground focus:outline-none"
-                        />
-                      </label>
+                        label={field.label}
+                        value={form[field.key]}
+                        placeholder={field.placeholder}
+                        disabled={isExtractingBrief}
+                        wide={field.wide}
+                        onChange={(next) => onUpdate(field.key, next)}
+                      />
                     ))}
                   </div>
                 </fieldset>

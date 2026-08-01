@@ -4,13 +4,22 @@ Scout stress-tests a startup idea with live web research, specialist analysis, a
 
 ## Product flow
 
+Scout runs one loop: **evidence → assumption → experiment → result → decision → updated thesis.**
+
 1. Enter an idea and as much context as available in the Scout composer.
 2. Scout runs eight focused Tavily searches covering market, timing, competitors, customer pain, go-to-market, and defensibility.
 3. Seven specialist agents receive the evidence relevant to their role and produce structured insights.
 4. A synthesis agent combines those insights and source evidence into a scored report.
-5. The frontend displays live activity, the final score breakdown, Markdown report, table of contents, verified sources, and Copy/Download actions.
+5. Completing a run materializes first-class records: claims, evidence, risk-ranked assumptions, suggested experiments, and the project's first thesis version.
+6. The founder accepts, rewrites, or rejects each assumption, then asks Scout to **build a validation sprint** for the riskiest open ones.
+7. The founder runs each experiment outside Scout and records metrics, quotes, surprises, and constraints against it.
+8. Scout reviews the observations against the experiment's own thresholds and proposes a decision with supporting and contradicting evidence.
+9. Confirming a decision — and only that — writes a new immutable thesis version. Rejecting it leaves the thesis untouched.
+10. The project timeline keeps every run, experiment, observation, decision, and thesis change in one ordered history.
 
 The seven specialists are Market Analyst, Competitor Analyst, Customer Analyst, GTM Agent, VC Partner, Moat Agent, and Experiment Agent. The report scores market, competition, distribution, execution, timing, and monetization, plus an overall score.
+
+Agents propose; application code commits. Every AI workflow returns a typed proposal, the persistence service validates ownership and state transitions, and the founder confirms anything that changes the canonical thesis.
 
 ## Stack
 
@@ -120,6 +129,7 @@ Open <http://localhost:3001>. Restart Next.js after changing `NEXT_PUBLIC_API_BA
 - **Progress feedback:** the main active-run indicator uses a calm live pulse; status counters show agent and search progress without blocking the page.
 - **Report view:** renders streamed Markdown with score breakdown, navigable headings, verified source links, Copy, and Download Markdown actions. The layout is fully mobile responsive: the score breakdown and rationale reflow to a single column on small screens, headings scale down, wide tables scroll horizontally within a bordered container, and the research-activity panel collapses so the report stays front and centre.
 - **Run controls:** Back and Stop warn before interrupting active research. Projects, ordered events, stage-level graph checkpoints, and completed report versions are persisted. Failed or cancelled runs can resume from the latest completed stage without repeating saved searches or specialist work.
+- **Validation workspace:** each project opens on **Validate**, the persisted loop. It shows the versioned thesis, risk-ranked assumptions with accept/rewrite/reject and status controls, a **Build my validation sprint** action, experiments grouped by lifecycle state with inline observation entry, decisions awaiting confirmation, and the full learning timeline. Canvas and Runs remain as separate tabs.
 - **Saved projects:** `/projects` lists every owned workspace as a card carrying its verdict score ring, six dimension bars, run status, run and version counts, with a portfolio stats strip, text search, and status filters. Each project page opens immutable report versions in the existing startup canvas through a version switcher, and shows run history as a timeline with per-run phase progress (evidence → specialists → synthesis) and inline resume.
 - **Timestamps:** run and version times render in the viewer's locale, swapped in after mount so server-rendered markup stays locale-independent.
 
@@ -148,6 +158,23 @@ All `/api/*` routes require a Clerk session token in `Authorization: Bearer <tok
 - `POST /api/runs/{run_id}/resume/stream` — compatibility path for request-coupled resume.
 - `GET /api/runs/{run_id}/events?after=N` — replay ordered persisted domain events.
 - `GET /api/projects/{project_id}/reports` — list immutable report versions.
+- `POST /api/startup/extract` — extract composer fields from a pasted startup brief.
+
+### Validation loop routes
+
+- `GET /api/projects/{project_id}/assumptions` — risk-ranked assumptions materialized from completed runs.
+- `PATCH /api/assumptions/{assumption_id}` — accept, rewrite, reject, restatus, or annotate one assumption. Rewrites keep Scout's original wording in provenance.
+- `GET /api/projects/{project_id}/claims` and `GET /api/projects/{project_id}/evidence` — source-backed claims and deduplicated evidence.
+- `POST /api/projects/{project_id}/sprint` — propose and commit a validation sprint for up to three open assumptions.
+- `GET /api/projects/{project_id}/experiments` — experiments with their linked assumptions and observations.
+- `PATCH /api/experiments/{experiment_id}` — edit an experiment or move it through `suggested → planned → running → completed`, or abandon it.
+- `POST/GET /api/experiments/{experiment_id}/observations` — record or list metrics, quotes, notes, surprises, and constraints.
+- `POST /api/experiments/{experiment_id}/review` — review recorded observations against the experiment's thresholds and propose a decision.
+- `GET /api/projects/{project_id}/decisions` — proposed, confirmed, and rejected decisions with their evidence.
+- `POST /api/decisions/{decision_id}/confirm` — confirm a decision; only this creates a new thesis version.
+- `POST /api/decisions/{decision_id}/reject` — reject a decision and leave the thesis unchanged.
+- `GET /api/projects/{project_id}/thesis` — immutable thesis versions, newest first.
+- `GET /api/projects/{project_id}/timeline` — the project's learning history across runs, reports, experiments, observations, decisions, and thesis changes.
 
 ### Legacy streaming route
 
@@ -199,6 +226,8 @@ Backend code lives under the `scout` package: `api/` contains authenticated and 
 
 The durable workflow stores no large research state in Inngest step outputs. Every step reloads canonical state by owned `run_id`; evidence, seven parallel specialist steps, and synthesis are independently memoized. Parallel specialist deltas merge under a PostgreSQL row lock, ordered events receive database-backed sequences, and report creation plus terminal events commit atomically. Duplicate dispatches and retried steps are idempotent.
 
+The validation loop is separated the same way. `persistence/loop_materializer.py` is pure and deterministic: it turns a completed report into claims, evidence, ranked assumptions, suggested experiments, and the initial thesis, and it runs inside the same transaction that writes the report artifact, so materialization is atomic and idempotent per run. `research/loop_workflows.py` holds the only two model calls in the loop, and both return proposals — a validation sprint or an experiment review — that `api/loop.py` maps back onto owned records before the persistence service commits them. Experiment lifecycle moves go through an explicit transition table, and a thesis version is created only by a founder-confirmed decision.
+
 The v2 graph follows a bounded research pipeline:
 
 1. Build eight topic-specific search queries from the startup context.
@@ -243,13 +272,14 @@ bun run typecheck
 bun run build
 ```
 
-The test suite covers request validation, blocking and streaming responses, SSE ordering, protocol errors, CORS behavior, Clerk identity extraction, missing-auth rejection, ownership isolation, event/report persistence, artifact versioning, source normalization, specialist fan-out, synthesis, score ownership, and report generation.
+The test suite covers request validation, blocking and streaming responses, SSE ordering, protocol errors, CORS behavior, Clerk identity extraction, missing-auth rejection, ownership isolation, event/report persistence, artifact versioning, source normalization, specialist fan-out, synthesis, score ownership, report generation, durable Inngest step ordering and registration, brief extraction, loop materialization and ranking, assumption review provenance, sprint commitment, experiment transitions, observation recording, review-to-decision flow, thesis versioning, and timeline assembly.
 
 ## Current limitations
 
 - The provider does not expose token-by-token model streaming. The completed structured report is generated after synthesis and its Markdown is emitted in 500-character SSE chunks.
 - In-flight synchronous provider calls may not stop immediately after cancellation, but cancelled runs reject later stage commits.
-- Canvas assumption and experiment status changes are still browser-local and are not first-class persisted records yet.
+- Experiments are executed outside Scout; the product records their design, observations, results, and decisions rather than running them.
+- Recurring execution-cycle memos and evidence-grounded questions over project history are not implemented yet.
 - Distributed rate limiting and production telemetry are not implemented.
 
 ### Vercel and Inngest production deployment

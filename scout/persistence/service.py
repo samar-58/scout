@@ -6,9 +6,25 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import func, select, tuple_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
-from scout.persistence.models import Project, ReportArtifact, ResearchRun, StreamEvent
+from scout.persistence.loop_materializer import (
+    THESIS_FIELDS,
+    build_materialization,
+)
+from scout.persistence.models import (
+    Assumption,
+    Claim,
+    Decision,
+    Evidence,
+    Experiment,
+    ExperimentObservation,
+    Project,
+    ProjectThesisVersion,
+    ReportArtifact,
+    ResearchRun,
+    StreamEvent,
+)
 from scout.persistence.schemas import ProjectCreate, ProjectUpdate
 
 
@@ -40,6 +56,17 @@ class ProjectSummary:
 
 
 PersistedEvent = tuple[int, str, dict[str, Any]]
+
+# Loop collections are read whole by the workspace, so each query is capped.
+# A project that legitimately exceeds these needs pagination, not a bigger read.
+MAX_ASSUMPTIONS = 200
+MAX_EXPERIMENTS = 200
+MAX_OBSERVATIONS = 500
+MAX_DECISIONS = 200
+MAX_THESIS_VERSIONS = 200
+MAX_CLAIMS = 500
+MAX_EVIDENCE = 500
+MAX_TIMELINE_ENTRIES = 400
 
 
 class PersistenceService:
@@ -452,6 +479,7 @@ class PersistenceService:
         run.completed_at = datetime.now(UTC)
         self.session.add(artifact)
         self._add_events(run.id, self._sequence_domain_events(run.id, events))
+        self._materialize_loop(run, report_payload)
         self.session.commit()
         self.session.refresh(run)
         return run
@@ -504,6 +532,7 @@ class PersistenceService:
         run.completed_at = datetime.now(UTC)
         self.session.add(artifact)
         self._add_events(run_id, events or [])
+        self._materialize_loop(run, report_payload)
         self.session.commit()
         self.session.refresh(run)
         return run
@@ -582,3 +611,646 @@ class PersistenceService:
             .order_by(ReportArtifact.version.desc())
         )
         return list(self.session.scalars(statement))
+
+    # --- Evidence-to-decision loop ---------------------------------------------
+
+    def _materialize_loop(self, run: ResearchRun, report_payload: dict[str, Any]) -> None:
+        """Turn a completed report into loop records inside the caller's transaction.
+
+        Idempotent per run: a retried or duplicated completion finds the run's
+        assumptions already present and does nothing.
+        """
+        existing = self.session.scalar(
+            select(func.count())
+            .select_from(Assumption)
+            .where(Assumption.run_id == run.id)
+        )
+        if existing:
+            return
+
+        plan = build_materialization(
+            request_payload=run.request_payload or {},
+            report_payload=report_payload or {},
+        )
+        provenance = plan["provenance"]
+
+        for claim in plan["claims"]:
+            self.session.add(
+                Claim(
+                    project_id=run.project_id,
+                    run_id=run.id,
+                    owner_id=self.owner_id,
+                    stance=claim["stance"],
+                    text=claim["text"],
+                    origin=claim["origin"],
+                )
+            )
+        for record in plan["evidence"]:
+            self.session.add(
+                Evidence(
+                    project_id=run.project_id,
+                    run_id=run.id,
+                    owner_id=self.owner_id,
+                    **record,
+                )
+            )
+
+        assumptions: dict[str, Assumption] = {}
+        for item in plan["assumptions"]:
+            assumption = Assumption(
+                project_id=run.project_id,
+                run_id=run.id,
+                owner_id=self.owner_id,
+                source_key=item["source_key"],
+                statement=item["statement"],
+                category=item["category"],
+                kind=item["kind"],
+                why_it_matters=item.get("why_it_matters"),
+                suggested_response=item.get("suggested_response"),
+                risk_rank=item["risk_rank"],
+                status="untested",
+                review_state="proposed",
+                provenance=provenance,
+            )
+            assumptions[item["source_key"]] = assumption
+            self.session.add(assumption)
+            evidence_text = item.get("evidence_text")
+            if evidence_text:
+                self.session.add(
+                    Claim(
+                        project_id=run.project_id,
+                        run_id=run.id,
+                        owner_id=self.owner_id,
+                        stance="contradicting",
+                        text=evidence_text,
+                        origin="Risk evidence",
+                    )
+                )
+
+        experiments: dict[str, Experiment] = {}
+        for item in plan["experiments"]:
+            experiment = Experiment(
+                project_id=run.project_id,
+                run_id=run.id,
+                owner_id=self.owner_id,
+                provenance=provenance,
+                **item,
+            )
+            experiments[item["source_key"]] = experiment
+            self.session.add(experiment)
+
+        for assumption_key, experiment_keys in plan["links"].items():
+            assumption = assumptions.get(assumption_key)
+            if assumption is None:
+                continue
+            for experiment_key in experiment_keys:
+                experiment = experiments.get(experiment_key)
+                if experiment is not None:
+                    experiment.assumptions.append(assumption)
+
+        has_thesis = self.session.scalar(
+            select(func.count())
+            .select_from(ProjectThesisVersion)
+            .where(ProjectThesisVersion.project_id == run.project_id)
+        )
+        if not has_thesis and plan["thesis"]:
+            # Version 1 is the only thesis version not created by a confirmed
+            # decision: there is nothing to decide against yet. Every later
+            # version comes from confirm_decision.
+            self.session.add(
+                ProjectThesisVersion(
+                    project_id=run.project_id,
+                    owner_id=self.owner_id,
+                    run_id=run.id,
+                    version=1,
+                    fields=plan["thesis"],
+                    summary=plan["thesis_summary"],
+                    change_note="Initial thesis from the first completed research run.",
+                )
+            )
+
+    def list_assumptions(self, project_id: UUID) -> list[Assumption]:
+        self.get_project(project_id)
+        statement = (
+            select(Assumption)
+            .where(
+                Assumption.project_id == project_id,
+                Assumption.owner_id == self.owner_id,
+            )
+            .order_by(Assumption.risk_rank, Assumption.created_at)
+            .limit(MAX_ASSUMPTIONS)
+        )
+        return list(self.session.scalars(statement))
+
+    def get_assumption(self, assumption_id: UUID) -> Assumption:
+        assumption = self.session.scalar(
+            select(Assumption).where(
+                Assumption.id == assumption_id,
+                Assumption.owner_id == self.owner_id,
+            )
+        )
+        if assumption is None:
+            raise ResourceNotFoundError("Assumption not found.")
+        return assumption
+
+    def review_assumption(
+        self,
+        assumption_id: UUID,
+        *,
+        statement: str | None = None,
+        category: str | None = None,
+        review_state: str | None = None,
+        status: str | None = None,
+        risk_rank: int | None = None,
+        confidence: int | None = None,
+        founder_note: str | None = None,
+    ) -> Assumption:
+        """Founder review. Editing the statement records the edit rather than
+        silently rewriting Scout's original proposal."""
+        assumption = self.get_assumption(assumption_id)
+        if statement is not None and statement.strip() != assumption.statement:
+            provenance = dict(assumption.provenance or {})
+            history = list(provenance.get("statement_history") or [])
+            history.append(assumption.statement)
+            provenance["statement_history"] = history[-10:]
+            provenance["edited_by_founder"] = True
+            assumption.provenance = provenance
+            assumption.statement = statement.strip()
+            if review_state is None:
+                review_state = "edited"
+        if category is not None:
+            assumption.category = category
+        if review_state is not None:
+            assumption.review_state = review_state
+        if status is not None:
+            assumption.status = status
+        if risk_rank is not None:
+            assumption.risk_rank = risk_rank
+        if confidence is not None:
+            assumption.confidence = confidence
+        if founder_note is not None:
+            assumption.founder_note = founder_note.strip() or None
+        self.session.commit()
+        self.session.refresh(assumption)
+        return assumption
+
+    def list_experiments(self, project_id: UUID) -> list[Experiment]:
+        self.get_project(project_id)
+        statement = (
+            select(Experiment)
+            .where(
+                Experiment.project_id == project_id,
+                Experiment.owner_id == self.owner_id,
+            )
+            # Both relationships are always serialized, so load them in two
+            # extra queries rather than two per experiment.
+            .options(
+                selectinload(Experiment.assumptions),
+                selectinload(Experiment.observations),
+            )
+            .order_by(Experiment.sprint_position, Experiment.created_at)
+            .limit(MAX_EXPERIMENTS)
+        )
+        return list(self.session.scalars(statement))
+
+    def get_experiment(self, experiment_id: UUID) -> Experiment:
+        experiment = self.session.scalar(
+            select(Experiment).where(
+                Experiment.id == experiment_id,
+                Experiment.owner_id == self.owner_id,
+            )
+        )
+        if experiment is None:
+            raise ResourceNotFoundError("Experiment not found.")
+        return experiment
+
+    def create_sprint_experiments(
+        self,
+        project_id: UUID,
+        *,
+        experiments: list[dict[str, Any]],
+        provenance: dict[str, Any] | None = None,
+    ) -> list[Experiment]:
+        """Commit a proposed validation sprint. Assumption links are validated
+        against owned assumptions so a model cannot invent relationships."""
+        self.get_project(project_id)
+        owned = {
+            assumption.id: assumption for assumption in self.list_assumptions(project_id)
+        }
+        position = self.session.scalar(
+            select(func.max(Experiment.sprint_position)).where(
+                Experiment.project_id == project_id
+            )
+        )
+        next_position = int(position or 0) + 1
+        created: list[Experiment] = []
+
+        for offset, item in enumerate(experiments):
+            assumption_ids = item.pop("assumption_ids", []) or []
+            experiment = Experiment(
+                project_id=project_id,
+                owner_id=self.owner_id,
+                provenance=provenance or {},
+                sprint_position=next_position + offset,
+                **item,
+            )
+            for assumption_id in assumption_ids:
+                assumption = owned.get(assumption_id)
+                if assumption is None:
+                    continue
+                experiment.assumptions.append(assumption)
+                if assumption.status == "untested":
+                    assumption.status = "testing"
+            self.session.add(experiment)
+            created.append(experiment)
+
+        self.session.commit()
+        for experiment in created:
+            self.session.refresh(experiment)
+        return created
+
+    _EXPERIMENT_TRANSITIONS = {
+        "suggested": {"planned", "running", "abandoned"},
+        "planned": {"running", "abandoned", "suggested"},
+        "running": {"completed", "abandoned"},
+        "completed": set(),
+        "abandoned": {"planned"},
+    }
+
+    def update_experiment(
+        self,
+        experiment_id: UUID,
+        *,
+        status: str | None = None,
+        fields: dict[str, Any] | None = None,
+    ) -> Experiment:
+        experiment = self.get_experiment(experiment_id)
+
+        # Validate before mutating: a rejected transition must not leave edited
+        # fields behind in the session.
+        if status is not None and status != experiment.status:
+            allowed = self._EXPERIMENT_TRANSITIONS.get(experiment.status, set())
+            if status not in allowed:
+                raise InvalidRunStateError(
+                    f"Cannot move an experiment from '{experiment.status}' to '{status}'."
+                )
+
+        for key, value in (fields or {}).items():
+            setattr(experiment, key, value)
+
+        if status is not None and status != experiment.status:
+            experiment.status = status
+            now = datetime.now(UTC)
+            if status == "running" and experiment.started_at is None:
+                experiment.started_at = now
+                for assumption in experiment.assumptions:
+                    if assumption.status == "untested":
+                        assumption.status = "testing"
+            if status in {"completed", "abandoned"}:
+                experiment.completed_at = now
+
+        self.session.commit()
+        self.session.refresh(experiment)
+        return experiment
+
+    def add_observation(
+        self,
+        experiment_id: UUID,
+        *,
+        kind: str,
+        text: str,
+        numeric_value: float | None = None,
+        participant_count: int | None = None,
+        source_url: str | None = None,
+    ) -> ExperimentObservation:
+        experiment = self.get_experiment(experiment_id)
+        observation = ExperimentObservation(
+            experiment_id=experiment.id,
+            project_id=experiment.project_id,
+            owner_id=self.owner_id,
+            kind=kind,
+            text=text,
+            numeric_value=numeric_value,
+            participant_count=participant_count,
+            source_url=source_url,
+        )
+        self.session.add(observation)
+        self.session.commit()
+        self.session.refresh(observation)
+        return observation
+
+    def list_observations(self, experiment_id: UUID) -> list[ExperimentObservation]:
+        experiment = self.get_experiment(experiment_id)
+        statement = (
+            select(ExperimentObservation)
+            .where(ExperimentObservation.experiment_id == experiment.id)
+            .order_by(ExperimentObservation.created_at)
+            .limit(MAX_OBSERVATIONS)
+        )
+        return list(self.session.scalars(statement))
+
+    def record_experiment_result(
+        self,
+        experiment_id: UUID,
+        *,
+        result: str,
+        result_summary: str | None,
+        review_payload: dict[str, Any] | None = None,
+    ) -> Experiment:
+        """Persist the reviewed outcome and propagate it to the tested assumptions."""
+        experiment = self.get_experiment(experiment_id)
+        experiment.result = result
+        experiment.result_summary = result_summary
+        if review_payload is not None:
+            experiment.review_payload = review_payload
+        experiment.review_at = datetime.now(UTC)
+        if experiment.status != "completed":
+            experiment.status = "completed"
+            experiment.completed_at = datetime.now(UTC)
+        for assumption in experiment.assumptions:
+            assumption.status = result
+        self.session.commit()
+        self.session.refresh(experiment)
+        return experiment
+
+    def create_decision(
+        self,
+        project_id: UUID,
+        *,
+        proposal: str,
+        kind: str = "thesis_change",
+        rationale: str | None = None,
+        supporting_evidence: list[Any] | None = None,
+        contradicting_evidence: list[Any] | None = None,
+        confidence: int | None = None,
+        reversal_conditions: str | None = None,
+        thesis_changes: dict[str, Any] | None = None,
+        experiment_id: UUID | None = None,
+        assumption_id: UUID | None = None,
+        provenance: dict[str, Any] | None = None,
+    ) -> Decision:
+        self.get_project(project_id)
+        if experiment_id is not None:
+            self.get_experiment(experiment_id)
+        if assumption_id is not None:
+            self.get_assumption(assumption_id)
+        decision = Decision(
+            project_id=project_id,
+            owner_id=self.owner_id,
+            experiment_id=experiment_id,
+            assumption_id=assumption_id,
+            kind=kind,
+            proposal=proposal,
+            rationale=rationale,
+            supporting_evidence=supporting_evidence or [],
+            contradicting_evidence=contradicting_evidence or [],
+            confidence=confidence,
+            reversal_conditions=reversal_conditions,
+            thesis_changes={
+                key: value
+                for key, value in (thesis_changes or {}).items()
+                if key in THESIS_FIELDS and isinstance(value, str) and value.strip()
+            },
+            status="proposed",
+            provenance=provenance or {},
+        )
+        self.session.add(decision)
+        self.session.commit()
+        self.session.refresh(decision)
+        return decision
+
+    def list_decisions(self, project_id: UUID) -> list[Decision]:
+        self.get_project(project_id)
+        statement = (
+            select(Decision)
+            .where(
+                Decision.project_id == project_id,
+                Decision.owner_id == self.owner_id,
+            )
+            .order_by(Decision.created_at.desc())
+            .limit(MAX_DECISIONS)
+        )
+        return list(self.session.scalars(statement))
+
+    def get_decision(self, decision_id: UUID) -> Decision:
+        decision = self.session.scalar(
+            select(Decision).where(
+                Decision.id == decision_id,
+                Decision.owner_id == self.owner_id,
+            )
+        )
+        if decision is None:
+            raise ResourceNotFoundError("Decision not found.")
+        return decision
+
+    def confirm_decision(
+        self,
+        decision_id: UUID,
+        *,
+        thesis_changes: dict[str, Any] | None = None,
+        change_note: str | None = None,
+    ) -> tuple[Decision, ProjectThesisVersion | None]:
+        """Only a founder-confirmed decision may change the canonical thesis."""
+        decision = self.get_decision(decision_id)
+        if decision.status == "confirmed":
+            return decision, self.latest_thesis(decision.project_id)
+        if decision.status != "proposed":
+            raise InvalidRunStateError(
+                f"Cannot confirm a decision in '{decision.status}' state."
+            )
+
+        if thesis_changes is not None:
+            decision.thesis_changes = {
+                key: value
+                for key, value in thesis_changes.items()
+                if key in THESIS_FIELDS and isinstance(value, str) and value.strip()
+            }
+        decision.status = "confirmed"
+        decision.confirmed_at = datetime.now(UTC)
+
+        version: ProjectThesisVersion | None = None
+        if decision.thesis_changes:
+            self.get_project(decision.project_id, for_update=True)
+            current = self.latest_thesis(decision.project_id)
+            fields = dict(current.fields) if current is not None else {}
+            for key, value in decision.thesis_changes.items():
+                fields[key] = {"value": value.strip(), "origin": "decision"}
+            version = ProjectThesisVersion(
+                project_id=decision.project_id,
+                owner_id=self.owner_id,
+                decision_id=decision.id,
+                version=(current.version if current is not None else 0) + 1,
+                fields=fields,
+                summary=decision.proposal,
+                change_note=change_note or decision.rationale,
+            )
+            self.session.add(version)
+
+        self.session.commit()
+        self.session.refresh(decision)
+        if version is not None:
+            self.session.refresh(version)
+        return decision, version
+
+    def reject_decision(self, decision_id: UUID, *, note: str | None = None) -> Decision:
+        decision = self.get_decision(decision_id)
+        if decision.status == "rejected":
+            return decision
+        if decision.status != "proposed":
+            raise InvalidRunStateError(
+                f"Cannot reject a decision in '{decision.status}' state."
+            )
+        decision.status = "rejected"
+        if note:
+            decision.rationale = (
+                f"{decision.rationale}\n\nFounder: {note}"
+                if decision.rationale
+                else f"Founder: {note}"
+            )
+        self.session.commit()
+        self.session.refresh(decision)
+        return decision
+
+    def list_thesis_versions(self, project_id: UUID) -> list[ProjectThesisVersion]:
+        self.get_project(project_id)
+        statement = (
+            select(ProjectThesisVersion)
+            .where(
+                ProjectThesisVersion.project_id == project_id,
+                ProjectThesisVersion.owner_id == self.owner_id,
+            )
+            .order_by(ProjectThesisVersion.version.desc())
+            .limit(MAX_THESIS_VERSIONS)
+        )
+        return list(self.session.scalars(statement))
+
+    def latest_thesis(self, project_id: UUID) -> ProjectThesisVersion | None:
+        return self.session.scalar(
+            select(ProjectThesisVersion)
+            .where(
+                ProjectThesisVersion.project_id == project_id,
+                ProjectThesisVersion.owner_id == self.owner_id,
+            )
+            .order_by(ProjectThesisVersion.version.desc())
+            .limit(1)
+        )
+
+    def list_claims(self, project_id: UUID) -> list[Claim]:
+        self.get_project(project_id)
+        statement = (
+            select(Claim)
+            .where(Claim.project_id == project_id, Claim.owner_id == self.owner_id)
+            .order_by(Claim.created_at)
+            .limit(MAX_CLAIMS)
+        )
+        return list(self.session.scalars(statement))
+
+    def list_evidence(self, project_id: UUID) -> list[Evidence]:
+        self.get_project(project_id)
+        statement = (
+            select(Evidence)
+            .where(Evidence.project_id == project_id, Evidence.owner_id == self.owner_id)
+            .order_by(Evidence.created_at)
+            .limit(MAX_EVIDENCE)
+        )
+        return list(self.session.scalars(statement))
+
+    def project_timeline(self, project_id: UUID) -> list[dict[str, Any]]:
+        """The project's learning history in one ordered list.
+
+        Assembled from the same records the canvas reads, so the timeline cannot
+        drift from the underlying state. Ownership is checked once here; the
+        queries below are all filtered by the same owner.
+        """
+        self.get_project(project_id)
+        entries: list[dict[str, Any]] = []
+
+        for run in self.list_runs(project_id):
+            entries.append(
+                {
+                    "kind": "run",
+                    "id": str(run.id),
+                    "at": run.completed_at or run.started_at or run.created_at,
+                    "title": (
+                        "Research completed"
+                        if run.status == "completed"
+                        else f"Research {run.status}"
+                    ),
+                    "detail": run.error_message,
+                    "status": run.status,
+                }
+            )
+
+        for report in self.list_reports(project_id):
+            entries.append(
+                {
+                    "kind": "report",
+                    "id": str(report.id),
+                    "at": report.created_at,
+                    "title": f"Report version {report.version}",
+                    "detail": (report.payload or {}).get("verdict"),
+                    "status": "completed",
+                }
+            )
+
+        for experiment in self.list_experiments(project_id):
+            if experiment.started_at is not None:
+                entries.append(
+                    {
+                        "kind": "experiment_started",
+                        "id": str(experiment.id),
+                        "at": experiment.started_at,
+                        "title": f"Started: {experiment.name}",
+                        "detail": experiment.success_metric,
+                        "status": "running",
+                    }
+                )
+            if experiment.completed_at is not None:
+                entries.append(
+                    {
+                        "kind": "experiment_completed",
+                        "id": str(experiment.id),
+                        "at": experiment.completed_at,
+                        "title": f"Completed: {experiment.name}",
+                        "detail": experiment.result_summary,
+                        "status": experiment.result or experiment.status,
+                    }
+                )
+            for observation in experiment.observations:
+                entries.append(
+                    {
+                        "kind": "observation",
+                        "id": str(observation.id),
+                        "at": observation.created_at,
+                        "title": f"{observation.kind.title()} recorded",
+                        "detail": observation.text,
+                        "status": observation.kind,
+                    }
+                )
+
+        for decision in self.list_decisions(project_id):
+            entries.append(
+                {
+                    "kind": "decision",
+                    "id": str(decision.id),
+                    "at": decision.confirmed_at or decision.created_at,
+                    "title": decision.proposal,
+                    "detail": decision.rationale,
+                    "status": decision.status,
+                }
+            )
+
+        for version in self.list_thesis_versions(project_id):
+            entries.append(
+                {
+                    "kind": "thesis_version",
+                    "id": str(version.id),
+                    "at": version.created_at,
+                    "title": f"Thesis version {version.version}",
+                    "detail": version.change_note or version.summary,
+                    "status": "confirmed",
+                }
+            )
+
+        entries.sort(key=lambda entry: entry["at"], reverse=True)
+        return entries[:MAX_TIMELINE_ENTRIES]

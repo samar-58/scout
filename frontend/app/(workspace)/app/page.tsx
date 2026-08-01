@@ -7,7 +7,7 @@ import { Composer } from "@/components/composer";
 import { useProjects } from "@/components/shell/projects-store";
 import { ViewHeader } from "@/components/shell/view-header";
 import { useComposerDraft } from "@/hooks/use-composer-draft";
-import { createProject, dispatchRun } from "@/lib/scout-api";
+import { createProject, dispatchRun, extractStartupBrief } from "@/lib/scout-api";
 import { readablePrompt, toPayload } from "@/lib/startup-form";
 
 /**
@@ -23,15 +23,53 @@ export default function ResearchPage() {
   const router = useRouter();
   const { getToken } = useAuth();
   const { refresh } = useProjects();
-  const { form, update, clearDraft, draftRestored, dismissRestoredNotice } =
-    useComposerDraft();
+  const {
+    form,
+    update,
+    applyExtracted,
+    clearDraft,
+    draftRestored,
+    dismissRestoredNotice,
+  } = useComposerDraft();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string>();
+  const [extracting, setExtracting] = useState(false);
+  const [extractionMessage, setExtractionMessage] = useState<string>();
+  const [extractionError, setExtractionError] = useState<string>();
+
+  /**
+   * A pasted brief is worth more than a pasted sentence: extract the fourteen
+   * composer fields from it, but only fill the ones the founder left blank so a
+   * long paste can never overwrite what they typed deliberately.
+   */
+  async function handleExtractBrief(text: string) {
+    setExtracting(true);
+    setExtractionMessage(undefined);
+    setExtractionError(undefined);
+    try {
+      const token = await getToken();
+      if (!token) throw new Error("Your session has expired. Please sign in again.");
+      const extracted = await extractStartupBrief(token, text);
+      applyExtracted(extracted);
+      const filled = Object.values(extracted).filter(Boolean).length;
+      setExtractionMessage(
+        `Filled ${filled} field${filled === 1 ? "" : "s"} from your brief. Review them before starting research.`,
+      );
+    } catch (extractionFailure) {
+      setExtractionError(
+        extractionFailure instanceof Error
+          ? extractionFailure.message
+          : "Scout could not read that brief. The pasted text is still here to edit.",
+      );
+    } finally {
+      setExtracting(false);
+    }
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const payload = toPayload(form);
-    if (!payload.idea || submitting) return;
+    if (!payload.idea || submitting || extracting) return;
 
     setSubmitting(true);
     setError(undefined);
@@ -69,6 +107,10 @@ export default function ResearchPage() {
         draftRestored={draftRestored}
         onClearDraft={clearDraft}
         onDismissRestored={dismissRestoredNotice}
+        onExtractBrief={handleExtractBrief}
+        isExtractingBrief={extracting}
+        extractionMessage={extractionMessage}
+        extractionError={extractionError}
       />
     </>
   );

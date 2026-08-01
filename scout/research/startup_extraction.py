@@ -28,6 +28,18 @@ class StartupBriefExtractionRequest(BaseModel):
         return cleaned
 
 
+def _coerce_string_list(value: Any) -> list[str] | None:
+    """Accept JSON arrays or the comma-separated strings models often emit."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        parts = [part.strip() for part in value.replace("\n", ",").split(",")]
+        return [part for part in parts if part] or None
+    if isinstance(value, list):
+        return value
+    return value
+
+
 class StartupBriefExtraction(BaseModel):
     """Founder-provided context extracted without adding researched facts."""
 
@@ -48,6 +60,11 @@ class StartupBriefExtraction(BaseModel):
     team_context: str | None = Field(max_length=2_000)
     known_competitors: list[str] | None = Field(max_length=20)
 
+    @field_validator("current_alternatives", "known_competitors", mode="before")
+    @classmethod
+    def coerce_list_fields(cls, value: Any) -> list[str] | None:
+        return _coerce_string_list(value)
+
 
 _EXTRACTION_SYSTEM_PROMPT = """You extract founder-provided startup context into a form.
 
@@ -59,7 +76,7 @@ Field rules:
 - target_customer: the explicit ICP, buyer, or user.
 - geography: only a stated target market or location.
 - business_model: the stated monetization or company model.
-- current_alternatives: distinct existing tools, workarounds, or doing-nothing options.
+- current_alternatives: JSON array of distinct existing tools, workarounds, or doing-nothing options.
 - customer_pain: stated severity, frequency, cost, or evidence of pain.
 - proposed_solution: the product and its differentiated mechanism.
 - gtm_constraints: stated acquisition limits, channels, regulation, budget, or sales constraints.
@@ -67,7 +84,7 @@ Field rules:
 - stage: stated company or product stage.
 - traction: stated users, revenue, pilots, waitlist, LOIs, or other progress.
 - team_context: stated team background or advantage.
-- known_competitors: explicitly named competing companies or products.
+- known_competitors: JSON array of explicitly named competing companies or products.
 
 Keep each field compact, preserve meaningful numbers, deduplicate lists, and never output placeholder phrases such as unknown, not provided, or N/A."""
 
