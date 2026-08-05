@@ -263,7 +263,7 @@ durable_startup_research = inngest_client.create_function(
     trigger=inngest.TriggerEvent(event=RESEARCH_REQUESTED_EVENT),
     idempotency="event.data.dispatch_id",
     singleton=inngest.Singleton(key="event.data.run_id", mode="skip"),
-    concurrency=[inngest.Concurrency(limit=8)],
+    concurrency=[inngest.Concurrency(limit=5)],
     cancel=[
         inngest.Cancel(
             event=RESEARCH_CANCELLED_EVENT,
